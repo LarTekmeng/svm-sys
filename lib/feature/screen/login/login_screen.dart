@@ -1,13 +1,9 @@
 import 'dart:ui';
-import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:online_doc_savimex/feature/screen/Login/login_bloc/bloc.dart';
-import 'package:online_doc_savimex/feature/screen/Login/login_bloc/event.dart';
-import 'package:online_doc_savimex/feature/screen/Login/login_bloc/state.dart';
-import 'package:online_doc_savimex/feature/screen/register/register.dart';
-import '../Homepage/homescreen.dart';
+
+import '../../../app_import.dart';
 
 class LoginScreen extends StatefulWidget {
+
   const LoginScreen({super.key});
   @override
   State<LoginScreen> createState() => _LoginScreenState();

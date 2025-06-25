@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import 'package:online_doc_savimex/feature/Model/employee.dart';
+import 'package:online_doc_savimex/app_import.dart';
 
 abstract class AuthLoginState extends Equatable {
   @override

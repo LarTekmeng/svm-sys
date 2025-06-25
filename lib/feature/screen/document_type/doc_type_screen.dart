@@ -1,11 +1,4 @@
-import 'package:flutter/material.dart' show AppBar, BorderRadius, BuildContext, Center, CircularProgressIndicator, Color, Colors, Column, ConnectionState, EdgeInsets, ElevatedButton, Expanded, FontWeight, FutureBuilder, Icon, IconButton, Icons, ListView, MaterialPageRoute, Navigator, Padding, RoundedRectangleBorder, SafeArea, Scaffold, SizedBox, State, StatefulWidget, Text, TextStyle, Widget;
-import 'package:online_doc_savimex/feature/screen/Doc_type/create_doc_type_screen.dart';
-import 'package:online_doc_savimex/feature/screen/Doc_type/widget/doc_type_card.dart';
-import 'package:online_doc_savimex/feature/screen/Homepage/homescreen.dart';
-import 'package:online_doc_savimex/feature/widget/search.dart';
-
-import '../../Model/document_type.dart';
-import '../../service/doctype_service.dart';
+import 'package:online_doc_savimex/app_import.dart';
 
 class DocumentTypeScreen extends StatefulWidget {
   final String employeeID;

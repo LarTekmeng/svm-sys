@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import '../../../Model/department.dart';
+import 'package:online_doc_savimex/app_import.dart';
 
 abstract class RegisterState extends Equatable {
   @override

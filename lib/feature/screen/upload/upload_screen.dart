@@ -1,10 +1,6 @@
-import 'package:flutter/material.dart';
+
 import 'package:intl/intl.dart';
-import 'package:online_doc_savimex/feature/Model/document_type.dart';
-import 'package:online_doc_savimex/feature/screen/Homepage/homescreen.dart';
-import 'package:online_doc_savimex/feature/screen/Upload/widget/uploadBlock.dart';
-import 'package:online_doc_savimex/feature/service/doctype_service.dart';
-import 'package:online_doc_savimex/feature/service/document_service.dart';
+import 'package:online_doc_savimex/app_import.dart';
 
 class UploadScreen extends StatefulWidget {
   final String employeeID;

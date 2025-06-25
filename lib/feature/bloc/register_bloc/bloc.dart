@@ -1,11 +1,4 @@
-import 'package:bloc/bloc.dart';
-import 'package:online_doc_savimex/feature/screen/register/register_bloc/event.dart';
-import 'package:online_doc_savimex/feature/screen/register/register_bloc/state.dart';
-import '../../../repositories/auth_repo.dart';
-import '../../../repositories/department_repo.dart';
-import 'event.dart';
-import 'state.dart';
-
+import 'package:online_doc_savimex/app_import.dart';
 class RegisterBloc extends Bloc<RegisterEvent, RegisterState> {
   final DepartmentRepository _depRepo;
   final AuthRepository _authRepo;

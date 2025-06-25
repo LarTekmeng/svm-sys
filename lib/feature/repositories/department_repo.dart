@@ -3,16 +3,8 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
 
-import '../Model/department.dart';
+import 'package:online_doc_savimex/app_import.dart';
 
-
-String getLocalhost(){
-  if(Platform.isAndroid){
-    return 'http://10.0.2.2:3000';
-  } else {
-    return 'http://localhost:3000';
-  }
-}
 
 class DepartmentRepository {
 

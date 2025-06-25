@@ -1,9 +1,6 @@
+
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
-import 'package:online_doc_savimex/feature/Model/document_type.dart';
-import 'package:online_doc_savimex/feature/screen/Doc_type/set_doc_type_screen.dart';
-import 'package:online_doc_savimex/feature/screen/Doc_type/create_doc_type_screen.dart';
-import 'package:online_doc_savimex/feature/service/doctype_service.dart';
+import 'package:online_doc_savimex/app_import.dart';
 
 class DocTypeCard extends StatelessWidget {
   final int id;
@@ -53,11 +50,13 @@ class DocTypeCard extends StatelessWidget {
               // Action buttons
               Row(
                 children: [
+                  /*Set flow of document so when employee post a document it will follow*/
                   _iconClick(
                     icon: CupertinoIcons.hand_draw_fill,
                     onTap: ()=>Navigator.push(context, MaterialPageRoute(builder: (context)=> SetDocumentTypeScreen())),
                   ),
                   const Text('/', style: TextStyle(color: Colors.white)),
+                  /*This is edit document type. nothing special just edit name and description*/
                   _iconClick(
                       icon: Icons.edit,
                       onTap: () async{final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (context)=> CreateDocumentTypeScreen(
@@ -66,6 +65,7 @@ class DocTypeCard extends StatelessWidget {
                         if(changed == true) onDeleted();
                       }),
                   const Text('/', style: TextStyle(color: Colors.white)),
+                  /*This is delete. to delete document type and also the set of document type*/
                   _iconClick(
                     icon: CupertinoIcons.delete,
                     onTap: () => _confirmAndDelete(context),

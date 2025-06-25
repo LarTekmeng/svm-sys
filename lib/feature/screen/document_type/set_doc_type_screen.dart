@@ -1,5 +1,4 @@
-import 'package:flutter/material.dart';
-import 'package:online_doc_savimex/feature/screen/Doc_type/widget/dropdown.dart';
+import 'package:online_doc_savimex/app_import.dart';
 
 class SetDocumentTypeScreen extends StatefulWidget {
   const SetDocumentTypeScreen({super.key});
@@ -9,7 +8,7 @@ class SetDocumentTypeScreen extends StatefulWidget {
 }
 
 class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
-  String selectedAction = 'Ask for Permission';
+  String selectedAction = 'Read-Only';
   String selectedForwardMode = '';
 
   bool isDirectExpanded = false;
@@ -55,7 +54,7 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
               const Text('Document type action:'),
               RadioListTile(
                 title: const Text('Read Only'),
-                value: 'Read Only',
+                value: 'Read-Only',
                 groupValue: selectedAction,
                 onChanged: (val) => setState(() => selectedAction = val!),
               ),

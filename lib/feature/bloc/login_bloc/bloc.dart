@@ -1,7 +1,4 @@
-import 'package:bloc/bloc.dart';
-import '../../../repositories/auth_repo.dart';
-import 'event.dart' hide AuthEvent;
-import 'state.dart';
+import 'package:online_doc_savimex/app_import.dart';
 
 class AuthLoginBloc extends Bloc<AuthLoginEvent, AuthLoginState> {
   final AuthRepository _repo;

@@ -1,15 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:online_doc_savimex/feature/Model/document.dart';
+import 'package:online_doc_savimex/app_import.dart';
 
-String getLocalhost(){
-  if(Platform.isAndroid){
-    return 'http://10.0.2.2:3000';
-  } else {
-    return 'http://localhost:3000';
-  }
-}
 String _baseUrl = getLocalhost();
 
 Future<List<Document>> fetchDocument() async {

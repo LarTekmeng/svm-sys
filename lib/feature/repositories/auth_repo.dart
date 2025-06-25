@@ -1,17 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
-
+import 'package:online_doc_savimex/app_import.dart';
 import 'package:http/http.dart' as http;
 
-import '../Model/employee.dart';
 
-String getLocalhost(){
-  if(Platform.isAndroid){
-    return 'http://10.0.2.2:3000';
-  } else {
-    return 'http://localhost:3000';
-  }
-}
 
 class AuthRepository{
 

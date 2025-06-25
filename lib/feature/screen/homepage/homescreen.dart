@@ -1,14 +1,4 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:online_doc_savimex/feature/Model/document.dart';
-import 'package:online_doc_savimex/feature/repositories/employee_repo.dart';
-import 'package:online_doc_savimex/feature/screen/Homepage/widget/doc_list.dart';
-import 'package:online_doc_savimex/feature/screen/Homepage/widget/drawer_home_screen.dart';
-import 'package:online_doc_savimex/feature/screen/Upload/Upload_Document/upload_screen.dart';
-import 'package:online_doc_savimex/feature/service/document_service.dart';
-import 'package:online_doc_savimex/feature/widget/button.dart';
-import 'package:online_doc_savimex/feature/widget/search.dart';
-import '../../service/employee_service.dart';
+import 'package:online_doc_savimex/app_import.dart';
 
 class Homescreen extends StatefulWidget {
   final String employeeID;

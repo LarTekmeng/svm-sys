@@ -1,15 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import '../Model/document_type.dart';
+import 'package:online_doc_savimex/app_import.dart';
 
-String getLocalhost(){
-  if(Platform.isAndroid){
-    return 'http://10.0.2.2:3000';
-  } else {
-    return 'http://localhost:3000';
-  }
-}
 String _baseUrl = getLocalhost();
 
 Future<Map<String, dynamic>> newDocType(String title, String description,) async {

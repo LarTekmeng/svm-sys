@@ -6,6 +6,7 @@ Widget buildDropdownRow() {
     children: [
       Expanded(
         child: dropdownField('Department', [
+          'all',
           'HR',
           'Accounting',
           'Finance',
@@ -14,13 +15,13 @@ Widget buildDropdownRow() {
       ),
       const SizedBox(width: 8),
       Expanded(
-        child: dropdownField('Employee', ['Pheak', 'Heng', 'Rith', 'Krissna']),
+        child: dropdownField('Employee', ['all','Pheak', 'Heng', 'Rith', 'Krissna']),
       ),
       const SizedBox(width: 8),
       Expanded(
         child: dropdownField('Action', [
-          'Approve',
-          'Approve & Signature',
+          'Approve', /* this equal checked at then push to Approve & Signature */
+          'Approve & Signature', /* normally use when top position in the company like CEO or Head of Department*/
           'Reject',
         ]),
       ),

@@ -1,10 +1,6 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:online_doc_savimex/feature/screen/Login/login_screen.dart';
-import 'package:online_doc_savimex/feature/screen/register/register_bloc/bloc.dart';
-import 'package:online_doc_savimex/feature/screen/register/register_bloc/event.dart';
-import 'package:online_doc_savimex/feature/screen/register/register_bloc/state.dart';
-import '../../Model/department.dart';
+import 'package:online_doc_savimex/app_import.dart';
+
+
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
