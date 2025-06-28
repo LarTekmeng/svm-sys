@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:image_picker/image_picker.dart';
 import 'package:online_doc_savimex/app_import.dart';
 
 
@@ -15,6 +18,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _nameCtrl  = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passCtrl  = TextEditingController();
+  File? _profileImage;
   Department? _selectedDept;
 
   @override
@@ -42,8 +46,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _passCtrl.text,
         _selectedDept!.id,
         _empIdCtrl.text.trim(),
+        profileImage: _profileImage,
       ),
     );
+  }
+  Future<void> _pickImage() async{
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery);
+    if(picked != null){
+      setState(() {
+        _profileImage = File(picked.path);
+      });
+    }
   }
 
   @override

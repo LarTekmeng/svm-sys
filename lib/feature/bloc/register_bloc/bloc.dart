@@ -38,6 +38,7 @@ class RegisterBloc extends Bloc<RegisterEvent, RegisterState> {
         event.password,
         event.departmentID,
         event.employeeID,
+        profileImage: event.profileImage,
       );
       emit(RegisterSuccess());
     } catch (e) {

@@ -1,30 +1,34 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:online_doc_savimex/app_import.dart';
 import 'package:http/http.dart' as http;
 
-
-
-class AuthRepository{
-
+class AuthRepository {
   final String _baseUrl = getLocalhost();
 
-  Future<Employee> registerEmployee(String name, String email, String password, int departmentID, String employeeID) async {
-    final resp = await http.post(
-      Uri.parse('$_baseUrl/api/auth/register'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'employee_name' : name, 'email' : email, 'password' : password, 'dp_id' : departmentID, 'em_id' : employeeID}),
-    );
-    if(resp.statusCode == 201){
-      if(resp.body.isEmpty){
-        throw Exception('Empty response from server');
-      }
+  Future<void> registerEmployee(
+    String name,
+    String email,
+    String password,
+    int departmentID,
+    String employeeID, {
+    File? profileImage,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/api/auth/register');
+    final req = http.MultipartRequest('POST', uri)
+    ..fields['employee_name'] = name
+    ..fields['email']         = email
+    ..fields['password']      = password
+    ..fields['dp_id']         = departmentID.toString()
+    ..fields['em_id']         = employeeID;
+    if(profileImage != null){
+      req.files.add(await http.MultipartFile.fromPath('profile_image', profileImage.path));
     }
-    final Map<String, dynamic> body = jsonDecode(resp.body);
+    final resp = await req.send();
     if (resp.statusCode != 201) {
-      throw Exception(body['error'] ?? 'Fail to Register');
+      final body = await resp.stream.bytesToString();
+      throw Exception('Register failed: $body');
     }
-    final employeeJson = body['employee'] as Map<String, dynamic>;
-    return Employee.fromJson(employeeJson);
   }
 
   Future<Employee> loginUser(String employeeID, String password) async {
