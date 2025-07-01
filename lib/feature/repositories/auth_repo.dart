@@ -18,7 +18,7 @@ class AuthRepository {
     final req = http.MultipartRequest('POST', uri)
     ..fields['employee_name'] = name
     ..fields['email']         = email
-    ..fields['password']      = password
+    ..fields['password']      = password.toString()
     ..fields['dp_id']         = departmentID.toString()
     ..fields['em_id']         = employeeID;
     if(profileImage != null){

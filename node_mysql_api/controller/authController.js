@@ -1,40 +1,102 @@
 const bcrypt = require('bcrypt');
 const db     = require('../db');
-
-exports.register = async (req, res) => {
-  const { employee_name, email, password, dp_id, em_id } = req.body;
-  if (!employee_name || !email || !password || !dp_id || !em_id) {
-    return res.status(400).json({ error: 'Missing fields' });
-  }
-
-  try {
-    const hash = await bcrypt.hash(password, 10);
-
-    const result = await db.one(
-      `INSERT INTO employee (employee_name, email, password, dp_id, em_id)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id`,
-      [employee_name, email,hash,dp_id,em_id]
-    );
-
-    res.status(201).json({
-      message: 'Registered successfully',
-      employee: {
-        id: result.id,
-        employee_name,
-        email,
-        dp_id,
-        em_id,
-      }
+const multer = require('multer');
+const upload = multer();
+const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+    const s3 = new S3Client({
+        region: "auto", // Or specify a region if needed
+        endpoint: process.env.R2_ENDPOINT,
+        credentials: {
+            accessKeyId: process.env.R2_ACCESS_KEY,
+            secretAccessKey: process.env.R2_SECRET_KEY,
+        },
     });
-  } catch (e) {
-    if (e.code === '23505') { // PostgreSQL duplicate key
-      return res.status(409).json({ error: 'Email already in use' });
+
+async function uploadToR2(key, body, contentType) {
+  await s3.send(new PutObjectCommand({
+    Bucket:      process.env.CF_R2_BUCKET,
+    Key:         key,
+    Body:        body,
+    ContentType: contentType,
+    // you can also set ACL, metadata, etc here
+  }));
+}
+
+exports.register = [
+  // 1) run multer to parse a single file under "profilePic"
+  upload.single('profile_image'),
+
+  // 2) your actual handler
+  async (req, res) => {
+    const { employee_name, email, password, dp_id, em_id } = req.body;
+    if (!employee_name || !email || !password || !dp_id || !em_id) {
+      return res.status(400).json({ error: 'Missing fields' });
     }
-    console.error(e);
-    res.status(500).json({ error: 'Server error' });
+
+    const existing = await db.oneOrnone(
+
+    )
+    try {
+      // 3) hash password
+      const hash = await bcrypt.hash(password, 10);
+
+      // 4) insert employee
+      const { id: employeeId } = await db.one(
+        `INSERT INTO employee (employee_name, email, password, dp_id, em_id)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id`,
+        [employee_name, email, hash, dp_id, em_id]
+      );
+
+      // 5) if there's an uploaded file, push to R2 & record its metadata
+      if (req.file) {
+        const file       = req.file;
+        const timestamp  = Date.now();
+        // e.g. "employees/42/162...-avatar.jpg"
+        const key        = `employees/${employeeId}/${timestamp}-${file.originalname}`;
+
+        // upload the bytes
+        await uploadToR2(key, file.buffer, file.mimetype);
+
+        // construct the public URL (adjust if you have a custom domain or presigned URLs)
+        const fileUrl = `${process.env.R2_ENDPOINT}/${process.env.CF_R2_BUCKET}/${key}`;
+
+        // save to file_upload table
+        await db.none(
+          `INSERT INTO file_upload
+             (employee_id, file_name, file_type, file_size_bytes, file_url)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            employeeId,
+            file.originalname,
+            file.mimetype,
+            file.size,
+            fileUrl
+          ]
+        );
+      }
+
+      // 6) respond
+      res.status(201).json({
+        message: 'Registered successfully',
+        employee: {
+          id:            employeeId,
+          employee_name,
+          email,
+          dp_id,
+          em_id
+        }
+      });
+    }
+    catch (e) {
+      if (e.code === '23505') {
+        return res.status(409).json({ error: 'Email already in use' });
+      }
+      console.error(e);
+      res.status(500).json({ error: 'Server error' });
+    }
   }
-};
+];
 
 exports.login = async (req, res) => {
   const { em_id, password } = req.body;
