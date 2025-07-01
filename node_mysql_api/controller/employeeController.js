@@ -22,9 +22,11 @@ exports.getByEmployeeId = async (req, res) => {
          e.email,
          e.dp_id,
          e.em_id,
-         d.name AS dp_name
+         d.name AS dp_name,
+         f.file_url
        FROM employee e
        LEFT JOIN department d ON e.dp_id = d.id
+       LEFT JOIN file_upload f ON e.id = f.employee_id
        WHERE e.em_id = $1`,
       [employeeId]
     );
@@ -35,7 +37,7 @@ exports.getByEmployeeId = async (req, res) => {
     }
 
     // only one response for the successful path
-    return res.json({ employee });
+    return res.json( employee );
 
   } catch (err) {
     console.error(err);

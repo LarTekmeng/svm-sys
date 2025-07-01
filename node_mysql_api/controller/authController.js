@@ -1,8 +1,8 @@
 const bcrypt = require('bcrypt');
 const db     = require('../db');
 const multer = require('multer');
-const upload = multer();
-const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const upload = multer({ storage: multer.memoryStorage()});
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
     const s3 = new S3Client({
         region: "auto", // Or specify a region if needed
         endpoint: process.env.R2_ENDPOINT,
@@ -14,7 +14,7 @@ const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/clien
 
 async function uploadToR2(key, body, contentType) {
   await s3.send(new PutObjectCommand({
-    Bucket:      process.env.CF_R2_BUCKET,
+    Bucket:      process.env.R2_BUCKET,
     Key:         key,
     Body:        body,
     ContentType: contentType,
@@ -23,19 +23,25 @@ async function uploadToR2(key, body, contentType) {
 }
 
 exports.register = [
-  // 1) run multer to parse a single file under "profilePic"
   upload.single('profile_image'),
 
-  // 2) your actual handler
   async (req, res) => {
     const { employee_name, email, password, dp_id, em_id } = req.body;
     if (!employee_name || !email || !password || !dp_id || !em_id) {
       return res.status(400).json({ error: 'Missing fields' });
     }
 
-    const existing = await db.oneOrnone(
+    // ——————————————
+    // 2a) Check for duplicate em_id
+    const existing = await db.oneOrNone(
+      `SELECT id FROM employee WHERE em_id = $1`,
+      [em_id]
+    );
+    if (existing) {
+      return res.status(409).json({ error: 'Employee ID already in use' });
+    }
+    // ——————————————
 
-    )
     try {
       // 3) hash password
       const hash = await bcrypt.hash(password, 10);
@@ -50,18 +56,15 @@ exports.register = [
 
       // 5) if there's an uploaded file, push to R2 & record its metadata
       if (req.file) {
-        const file       = req.file;
-        const timestamp  = Date.now();
-        // e.g. "employees/42/162...-avatar.jpg"
-        const key        = `employees/${employeeId}/${timestamp}-${file.originalname}`;
+        const file      = req.file;
+        const timestamp = Date.now();
+        const key       = `employees/${employeeId}/${timestamp}-${file.originalname}`;
 
-        // upload the bytes
         await uploadToR2(key, file.buffer, file.mimetype);
 
-        // construct the public URL (adjust if you have a custom domain or presigned URLs)
-        const fileUrl = `${process.env.R2_ENDPOINT}/${process.env.CF_R2_BUCKET}/${key}`;
+        const fileUrl = `https://pub-${process.env.ACCOUNT_HASH}.r2.dev/${process.env.R2_BUCKET}/${key}`
+;
 
-        // save to file_upload table
         await db.none(
           `INSERT INTO file_upload
              (employee_id, file_name, file_type, file_size_bytes, file_url)
@@ -79,13 +82,7 @@ exports.register = [
       // 6) respond
       res.status(201).json({
         message: 'Registered successfully',
-        employee: {
-          id:            employeeId,
-          employee_name,
-          email,
-          dp_id,
-          em_id
-        }
+        employee: { id: employeeId, employee_name, email, dp_id, em_id }
       });
     }
     catch (e) {
@@ -97,6 +94,7 @@ exports.register = [
     }
   }
 ];
+
 
 exports.login = async (req, res) => {
   const { em_id, password } = req.body;
