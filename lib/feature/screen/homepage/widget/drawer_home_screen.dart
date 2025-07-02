@@ -11,46 +11,51 @@ class DrawerHomeScreen extends StatefulWidget {
 class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
   late Future<Employee> _employee;
 
-
   @override
   void initState() {
     super.initState();
-    _employee = context.read<EmployeeRepository>().fetchEmployeeByID(widget.employeeID).then((data) => Employee.fromJson(data));
+    _employee = context.read<EmployeeRepository>().fetchEmployeeByID(
+      widget.employeeID,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Drawer(
       backgroundColor: Color.fromRGBO(0, 105, 133, 1),
-      child: FutureBuilder(future: _employee, builder: (context, snapshot){
-        if(snapshot.connectionState != ConnectionState.done){
-          return Center(child: CircularProgressIndicator(),);
-        }
-        if(snapshot.hasError){
-          return Center(child: Text('Error loading profile: ${snapshot.error}'),);
-        }
-        final employee = snapshot.data;
-        return ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            _buildHeader(employee!),
-            ..._buildMenuTiles(),
-          ],
-        );
-      })
+      child: FutureBuilder(
+        future: _employee,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error loading profile: ${snapshot.error}'),
+            );
+          }
+          final employee = snapshot.data;
+          return ListView(
+            padding: EdgeInsets.zero,
+            children: [_buildHeader(employee!), ..._buildMenuTiles()],
+          );
+        },
+      ),
     );
   }
+
   Widget _buildHeader(Employee e) {
+    final hasAvatar = e.profileImageUrl.trim().isNotEmpty ?? false;
     return DrawerHeader(
       decoration: const BoxDecoration(color: Color.fromRGBO(0, 105, 133, 1)),
       child: Row(
         children: [
           CircleAvatar(
             radius: 30,
-            backgroundImage: AssetImage('assets/images/company_logo.png') as ImageProvider,
-            /* e.avatarUrl != null
-                ? NetworkImage(e.avatarUrl!)
-                : const AssetImage('assets/images/default_avatar.png') as ImageProvider, */
+            backgroundImage:
+                hasAvatar
+                    ? NetworkImage(e.profileImageUrl)
+                    : AssetImage('assets/images/user.png'),
           ),
           const SizedBox(width: 12),
           Column(
@@ -69,9 +74,7 @@ class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
 
   List<Widget> _buildMenuTiles() {
     return [
-      _drawerTile(
-          Icons.category,
-          'Document Type', () {
+      _drawerTile(Icons.category, 'Document Type', () {
         Navigator.pop(context);
         Navigator.push(
           context,
@@ -81,7 +84,10 @@ class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
         );
       }),
       _drawerTile(Icons.logout, 'Logout', () {
-        // TODO: implement logout
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => LoginScreen()),
+        );
       }),
     ];
   }
@@ -95,11 +101,11 @@ class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
   Widget _drawerTile(IconData icon, String title, VoidCallback onTap) {
     return ListTile(
       leading: Icon(icon, color: Colors.white),
-      title: Text(title, style: const TextStyle(fontSize: 16,color: Colors.white)),
+      title: Text(
+        title,
+        style: const TextStyle(fontSize: 16, color: Colors.white),
+      ),
       onTap: onTap,
     );
   }
 }
-
-
-

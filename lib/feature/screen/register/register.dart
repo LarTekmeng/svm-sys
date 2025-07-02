@@ -11,11 +11,12 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _empIdCtrl = TextEditingController();
-  final _nameCtrl = TextEditingController();
+  final _nameCtrl  = TextEditingController();
   final _emailCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
+  final _passCtrl  = TextEditingController();
+
   File? _profileImage;
-  Department? _selectedDept;
+  int? _selectedDeptId;              // ← holds only the dept ID
 
   @override
   void initState() {
@@ -34,13 +35,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _onSubmit() {
-    if (!_formKey.currentState!.validate() || _selectedDept == null) return;
+    if (!_formKey.currentState!.validate() || _selectedDeptId == null) return;
     context.read<RegisterBloc>().add(
       RegisterRequested(
         _nameCtrl.text.trim(),
         _emailCtrl.text.trim(),
         _passCtrl.text,
-        _selectedDept!.id,
+        _selectedDeptId!,           // ← pass the int dept ID
         _empIdCtrl.text.trim(),
         profileImage: _profileImage,
       ),
@@ -67,9 +68,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             MaterialPageRoute(builder: (_) => const LoginScreen()),
           );
         } else if (state is RegisterFailure) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(state.error)));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(state.error)));
         }
       },
       child: Scaffold(
@@ -79,13 +79,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
             if (state is RegisterLoading) {
               return const Center(child: CircularProgressIndicator());
             }
+
+            // pull departments list out of state
             List<Department> depts = [];
             if (state is DepartmentsLoadSuccess) {
               depts = state.departments;
-              if (_selectedDept == null && depts.isNotEmpty) {
-                _selectedDept = depts.first;
-              }
+              // default to first dept ID if none selected yet
+              _selectedDeptId ??= depts.isNotEmpty ? depts.first.id : null;
             }
+
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Form(
@@ -93,62 +95,49 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // avatar picker
                     Center(
                       child: GestureDetector(
                         onTap: _pickImage,
                         child: CircleAvatar(
                           radius: 48,
                           backgroundImage:
-                              _profileImage != null
-                                  ? FileImage(_profileImage!)
-                                  : null,
-                          child:
-                              _profileImage == null
-                                  ? Icon(Icons.person, size: 48)
-                                  : null,
+                          _profileImage != null ? FileImage(_profileImage!) : null,
+                          child: _profileImage == null
+                              ? const Icon(Icons.person, size: 48)
+                              : null,
                         ),
                       ),
                     ),
-                    SizedBox(height: 16,),
-                    DropdownButtonFormField<Department>(
-                      value: _selectedDept,
-                      decoration: const InputDecoration(
-                        labelText: 'Department',
-                      ),
-                      items:
-                          depts
-                              .map(
-                                (d) => DropdownMenuItem(
-                                  value: d,
-                                  child: Text(d.name),
-                                ),
-                              )
-                              .toList(),
-                      onChanged: (d) => setState(() => _selectedDept = d),
-                      validator:
-                          (_) =>
-                              _selectedDept == null
-                                  ? 'Please select one'
-                                  : null,
+                    const SizedBox(height: 16),
+
+                    // DEPARTMENT dropdown now holds int IDs
+                    DropdownButtonFormField<int>(
+                      value: _selectedDeptId,
+                      decoration: const InputDecoration(labelText: 'Department'),
+                      items: depts.map((d) {
+                        return DropdownMenuItem<int>(
+                          value: d.id,
+                          child: Text(d.name),
+                        );
+                      }).toList(),
+                      onChanged: (id) => setState(() => _selectedDeptId = id),
+                      validator: (_) =>
+                      _selectedDeptId == null ? 'Please select one' : null,
                     ),
+
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _empIdCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Employee ID',
-                      ),
-                      validator:
-                          (v) =>
-                              v == null || v.isEmpty
-                                  ? 'Enter employee ID'
-                                  : null,
+                      decoration: const InputDecoration(labelText: 'Employee ID'),
+                      validator: (v) =>
+                      v == null || v.isEmpty ? 'Enter employee ID' : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _nameCtrl,
                       decoration: const InputDecoration(labelText: 'Name'),
-                      validator:
-                          (v) => v == null || v.isEmpty ? 'Enter name' : null,
+                      validator: (v) => v == null || v.isEmpty ? 'Enter name' : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -177,13 +166,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: const Text('Register'),
                     ),
                     TextButton(
-                      onPressed:
-                          () => Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const LoginScreen(),
-                            ),
-                          ),
+                      onPressed: () => Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      ),
                       child: const Text('Have an account? Login'),
                     ),
                   ],

@@ -6,6 +6,7 @@ class Employee{
   final int? departmentID;
   final String employeeID;
   final String departmentName;
+  final String profileImageUrl;
 
   Employee({
     this.id,
@@ -14,6 +15,7 @@ class Employee{
     this.departmentID,
     required this.employeeID,
     required this.departmentName,
+    required this.profileImageUrl,
   });
 
   factory Employee.fromJson(Map<String, dynamic> json) {
@@ -24,6 +26,7 @@ class Employee{
       departmentID:  json['dp_id'] as int?,
       employeeID: (json['em_id'] as String?) ?? '',
       departmentName: (json['dp_name'] as String?) ?? '',
+      profileImageUrl: (json['file_url'] as String?) ?? '',
     );
   }
 }
