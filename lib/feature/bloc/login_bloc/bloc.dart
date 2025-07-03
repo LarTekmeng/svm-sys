@@ -9,7 +9,12 @@ class AuthLoginBloc extends Bloc<AuthLoginEvent, AuthLoginState> {
   Future<void> _onLogin(LoginRequested e, Emitter<AuthLoginState> emit) async {
     emit(AuthLoading());
     try {
-      final employee = await _repo.loginUser(e.employeeID, e.password);
+      final employee = await _repo.loginUser(
+          e.employeeID,
+          e.password,
+          rememberMe: e.rememberMe,
+
+      );
       emit(AuthAuthenticated(employee));
     } catch (ex) {
       emit(AuthFailure(ex.toString()));

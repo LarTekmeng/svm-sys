@@ -13,6 +13,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _employeeIdCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
+  bool _rememberMe = false;
 
   @override
   void dispose() {
@@ -21,12 +22,19 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
     context.read<AuthLoginBloc>().add(
       LoginRequested(
         _employeeIdCtrl.text.trim(),
         _passCtrl.text.trim(),
+        rememberMe: _rememberMe,
       ),
     );
   }
@@ -36,12 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return BlocConsumer<AuthLoginBloc, AuthLoginState>(
       listener: (context, state) {
         if (state is AuthAuthenticated) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => Homescreen(employeeID: state.employee.employeeID),
-            ),
-          );
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => Homescreen(employeeID: state.employee.employeeID)));
         }
         if (state is AuthFailure) {
           ScaffoldMessenger.of(context)
@@ -115,34 +118,41 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         const SizedBox(height: 10),
 
-                        // Login button / spinner
-                        loading
-                            ? const CircularProgressIndicator()
-                            : ElevatedButton(
-                          onPressed: _submit,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            elevation: 4,
-                            shadowColor: Colors.black45,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 30.0,
-                              vertical: 12,
-                            ),
-                            child: Text(
-                              'Login',
-                              style: TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.bold,
+                        Row(
+                          children: [
+                            loading
+                                ? const CircularProgressIndicator()
+                                : ElevatedButton(
+                              onPressed: _submit,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                elevation: 4,
+                                shadowColor: Colors.black45,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 20.0,
+                                  vertical: 12,
+                                ),
+                                child: Text(
+                                  'Login',
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                            Checkbox(
+                              value: _rememberMe,
+                              onChanged: (v) => setState(() => _rememberMe = v!),
+                            ),
+                            const Text('Remember Me', style: TextStyle(color: Colors.white)),
+                          ],
                         ),
-
                         const SizedBox(height: 10),
                         Row(
                           children: [

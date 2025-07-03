@@ -62,7 +62,7 @@ exports.register = [
 
         await uploadToR2(key, file.buffer, file.mimetype);
 
-        const fileUrl = `https://pub-${process.env.ACCOUNT_HASH}.r2.dev/${process.env.R2_BUCKET}/${key}`
+        const fileUrl = `${process.env.R2_PUBLIC_URL_PROFILE}/${process.env.R2_BUCKET}/${key}`
 ;
 
         await db.none(

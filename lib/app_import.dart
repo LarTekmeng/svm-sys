@@ -3,6 +3,11 @@ import 'dart:io';
 export 'package:flutter/material.dart';
 export 'package:flutter_bloc/flutter_bloc.dart';
 export 'package:image_picker/image_picker.dart';
+
+/* persist user login (Remember Me) */
+export 'package:flutter_secure_storage/flutter_secure_storage.dart';
+/* ===== */
+
 /*Login BLOC*/
 export 'package:online_doc_savimex/feature/bloc/login_bloc/bloc.dart';
 export 'package:online_doc_savimex/feature/bloc/login_bloc/event.dart';

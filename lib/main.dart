@@ -1,3 +1,5 @@
+import 'package:online_doc_savimex/feature/presentation/splash_screen.dart';
+
 import 'app_import.dart';
 
 void main() {
@@ -10,7 +12,9 @@ void main() {
         RepositoryProvider<DepartmentRepository>(
           create: (_) => DepartmentRepository(),
         ),
-        RepositoryProvider<EmployeeRepository>(create: (_) => EmployeeRepository())
+        RepositoryProvider<EmployeeRepository>(
+            create: (_) => EmployeeRepository()
+        )
       ],
       child: MultiBlocProvider(
         providers: [
@@ -43,7 +47,16 @@ class MyApp extends StatelessWidget {
       title: 'Flutter Demo',
       initialRoute: '/',
       routes: {
-        '/' : (context) => LoginScreen(),
+        '/' : (context) => SplashScreen(),
+        '/login' : (context) => LoginScreen(),
+        '/home':  (context) {
+          final state = context.watch<AuthLoginBloc>().state;
+          if (state is AuthAuthenticated) {
+            return Homescreen(employeeID: state.employee.employeeID);
+          }
+          // fallback to splash while routing
+          return const SplashScreen();
+        },
       },
     );
   }

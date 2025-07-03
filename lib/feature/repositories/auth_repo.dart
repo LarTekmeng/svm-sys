@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 class AuthRepository {
   final String _baseUrl = getLocalhost();
+  final _storage = FlutterSecureStorage();
 
   Future<void> registerEmployee(
     String name,
@@ -31,7 +32,7 @@ class AuthRepository {
     }
   }
 
-  Future<Employee> loginUser(String employeeID, String password) async {
+  Future<Employee> loginUser(String employeeID, String password, {bool rememberMe = false}) async {
     final resp = await http.post(
       Uri.parse('$_baseUrl/api/auth/login'),
       headers: {'Content-Type': 'application/json'},
@@ -43,8 +44,17 @@ class AuthRepository {
     if (resp.statusCode != 200 || body['message'] != 'Login successful') {
       throw Exception(body['error'] ?? 'Login failed');
     }
+    final token = body['token'] as String?;
+    if (rememberMe && token != null) {
+      await _storage.write(key: 'authToken', value: token);
+    } else {
+      await _storage.delete(key: 'authToken');
+    }
     // your API wraps the user under `user`
     final employeeJson = body['employee'] as Map<String, dynamic>;
     return Employee.fromJson(employeeJson);
   }
+  Future<bool> hasToken() async => (await _storage.read(key: 'authToken')) != null;
+  Future<void> logout() async => await _storage.delete(key: 'authToken');
+
 }

@@ -3,5 +3,6 @@ abstract class AuthLoginEvent {}
 
 class LoginRequested extends AuthLoginEvent {
   final String employeeID, password;
-  LoginRequested(this.employeeID, this.password);
+  final bool rememberMe;
+  LoginRequested(this.employeeID, this.password, {this.rememberMe = false});
 }
