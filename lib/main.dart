@@ -6,27 +6,30 @@ void main() {
   runApp(
     MultiRepositoryProvider(
       providers: [
-        RepositoryProvider<AuthRepository>(
-          create: (_) => AuthRepository(),
-        ),
+        RepositoryProvider<AuthRepository>(create: (_) => AuthRepository()),
         RepositoryProvider<DepartmentRepository>(
           create: (_) => DepartmentRepository(),
         ),
         RepositoryProvider<EmployeeRepository>(
-            create: (_) => EmployeeRepository()
-        )
+          create: (_) => EmployeeRepository(),
+        ),
       ],
       child: MultiBlocProvider(
         providers: [
           // Registration Bloc (loads departments up-front)
           BlocProvider<RegisterBloc>(
-            create: (ctx) => RegisterBloc(
-              depRepo:  ctx.read<DepartmentRepository>(),
-              authRepo: ctx.read<AuthRepository>(),
-            )
-              ..add(LoadDepartments()),
+            create:
+                (ctx) => RegisterBloc(
+                  depRepo: ctx.read<DepartmentRepository>(),
+                  authRepo: ctx.read<AuthRepository>(),
+                )..add(LoadDepartments()),
           ),
-          BlocProvider<AuthLoginBloc>(create: (ctx) => AuthLoginBloc(ctx.read<AuthRepository>()))
+          BlocProvider<AuthLoginBloc>(
+            create:
+                (ctx) =>
+                    AuthLoginBloc(ctx.read<AuthRepository>(),)
+                      ..add(AppStarted()),
+          ),
 
           // (You can add other Blocs here, e.g. AuthBloc, EmployeeBloc, etc.)
         ],
@@ -36,10 +39,14 @@ void main() {
   );
 }
 
-
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
@@ -47,15 +54,12 @@ class MyApp extends StatelessWidget {
       title: 'Flutter Demo',
       initialRoute: '/',
       routes: {
-        '/' : (context) => SplashScreen(),
-        '/login' : (context) => LoginScreen(),
-        '/home':  (context) {
-          final state = context.watch<AuthLoginBloc>().state;
-          if (state is AuthAuthenticated) {
-            return Homescreen(employeeID: state.employee.employeeID);
-          }
-          // fallback to splash while routing
-          return const SplashScreen();
+        '/': (context) => SplashScreen(),
+        '/login': (context) => LoginScreen(),
+        '/home': (context) {
+          final employee =
+              ModalRoute.of(context)!.settings.arguments as Employee;
+          return Homescreen(employeeID: employee.employeeID);
         },
       },
     );

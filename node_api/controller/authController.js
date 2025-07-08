@@ -1,4 +1,5 @@
 const bcrypt = require('bcrypt');
+const jwt    = require('jsonwebtoken');
 const db     = require('../db');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage()});
@@ -24,13 +25,11 @@ async function uploadToR2(key, body, contentType) {
 
 exports.register = [
   upload.single('profile_image'),
-
   async (req, res) => {
     const { employee_name, email, password, dp_id, em_id } = req.body;
     if (!employee_name || !email || !password || !dp_id || !em_id) {
       return res.status(400).json({ error: 'Missing fields' });
     }
-
     // ——————————————
     // 2a) Check for duplicate em_id
     const existing = await db.oneOrNone(
@@ -41,11 +40,9 @@ exports.register = [
       return res.status(409).json({ error: 'Employee ID already in use' });
     }
     // ——————————————
-
     try {
       // 3) hash password
       const hash = await bcrypt.hash(password, 10);
-
       // 4) insert employee
       const { id: employeeId } = await db.one(
         `INSERT INTO employee (employee_name, email, password, dp_id, em_id)
@@ -53,15 +50,12 @@ exports.register = [
          RETURNING id`,
         [employee_name, email, hash, dp_id, em_id]
       );
-
       // 5) if there's an uploaded file, push to R2 & record its metadata
       if (req.file) {
         const file      = req.file;
         const timestamp = Date.now();
         const key       = `employees/${employeeId}/${timestamp}-${file.originalname}`;
-
         await uploadToR2(key, file.buffer, file.mimetype);
-
         const fileUrl = `${process.env.R2_PUBLIC_URL}/${key}`
 ;
 
@@ -115,16 +109,25 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid Password' });
     }
 
-    res.json({
-      message: 'Login successful',
-      employee: {
-        id:            employee.id,
-        employee_name: employee.employee_name,
-        email:         employee.email,
-        dp_id:         employee.dp_id,
-        em_id:         employee.em_id,
-      }
-    });
+    const payload = { id: employee.id, em_id: employee.em_id };
+    const token = jwt.sign(
+        payload,
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+    );
+    res.json(
+        {
+            message: 'Login successful',
+            token,
+            employee: {
+                        id:            employee.id,
+                        employee_name: employee.employee_name,
+                        email:         employee.email,
+                        dp_id:         employee.dp_id,
+                        em_id:         employee.em_id,
+                  }
+        }
+    )
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Server error' });

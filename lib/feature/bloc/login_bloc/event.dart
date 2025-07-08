@@ -6,3 +6,7 @@ class LoginRequested extends AuthLoginEvent {
   final bool rememberMe;
   LoginRequested(this.employeeID, this.password, {this.rememberMe = false});
 }
+
+class AppStarted extends AuthLoginEvent {}
+
+class LogoutRequested extends AuthLoginEvent {}

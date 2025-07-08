@@ -8,7 +8,6 @@ abstract class AuthLoginState extends Equatable {
 
 class AuthInitial extends AuthLoginState {}
 class AuthLoading extends AuthLoginState {}
-
 class AuthAuthenticated extends AuthLoginState {
   final Employee employee;
   AuthAuthenticated(this.employee);
@@ -16,7 +15,7 @@ class AuthAuthenticated extends AuthLoginState {
   @override
   List<Object?> get props => [employee];
 }
-
+class Unauthenticated extends AuthLoginState {}
 class AuthFailure extends AuthLoginState {
   final String error;
   AuthFailure(this.error);

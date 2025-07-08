@@ -56,7 +56,6 @@ export 'package:online_doc_savimex/feature/model/employee.dart';
 
 /*Service*/
 export 'package:online_doc_savimex/feature/service/doctype_service.dart';
-export 'package:online_doc_savimex/feature/service/auth_service.dart';
 export 'package:online_doc_savimex/feature/service/document_service.dart';
 export 'package:online_doc_savimex/feature/service/employee_service.dart';
 /* ===== */

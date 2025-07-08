@@ -29,4 +29,12 @@ class Employee{
       profileImageUrl: (json['file_url'] as String?) ?? '',
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id' : id,
+    'employee_name' : employeeName,
+    'email' : email,
+    'dp_id' : departmentID,
+    'em_id' : employeeID,
+  };
 }

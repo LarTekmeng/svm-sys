@@ -14,6 +14,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _employeeIdCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   bool _rememberMe = false;
+  bool _isloading = false;
+  final AuthRepository _authRepo = AuthRepository();
 
   @override
   void dispose() {
@@ -28,30 +30,24 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
   }
 
-  void _submit() {
-    if (!_formKey.currentState!.validate()) return;
-    context.read<AuthLoginBloc>().add(
-      LoginRequested(
-        _employeeIdCtrl.text.trim(),
-        _passCtrl.text.trim(),
-        rememberMe: _rememberMe,
-      ),
-    );
+  void _onLogin() async {
+    setState(() => _isloading = true);
+
+    try{
+      final employee = await _authRepo.loginUser(employeeID: _employeeIdCtrl.text, password: _passCtrl.text, rememberMe: _rememberMe);
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => Homescreen(employeeID: employee.employeeID)));
+    }
+    catch (e){
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+    finally{
+      setState(() => _isloading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<AuthLoginBloc, AuthLoginState>(
-      listener: (context, state) {
-        if (state is AuthAuthenticated) {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => Homescreen(employeeID: state.employee.employeeID)));
-        }
-        if (state is AuthFailure) {
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(SnackBar(content: Text(state.error)));
-        }
-      },
+    return BlocBuilder<AuthLoginBloc, AuthLoginState>(
       builder: (context, state) {
         final loading = state is AuthLoading;
         final errorMessage = state is AuthFailure ? state.error : '';
@@ -123,7 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             loading
                                 ? const CircularProgressIndicator()
                                 : ElevatedButton(
-                              onPressed: _submit,
+                              onPressed: _isloading ? null : _onLogin,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.white,
                                 elevation: 4,
@@ -148,7 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             Checkbox(
                               value: _rememberMe,
-                              onChanged: (v) => setState(() => _rememberMe = v!),
+                              onChanged: (v) => setState(() => _rememberMe = v ?? false),
                             ),
                             const Text('Remember Me', style: TextStyle(color: Colors.white)),
                           ],

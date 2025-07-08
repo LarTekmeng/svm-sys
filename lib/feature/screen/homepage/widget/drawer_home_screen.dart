@@ -10,12 +10,21 @@ class DrawerHomeScreen extends StatefulWidget {
 
 class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
   late Future<Employee> _employee;
+  final AuthRepository _authRepo = AuthRepository();
 
   @override
   void initState() {
     super.initState();
     _employee = context.read<EmployeeRepository>().fetchEmployeeByID(
       widget.employeeID,
+    );
+  }
+
+  void _onLogout() async {
+    await _authRepo.logout();
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => LoginScreen()),
     );
   }
 
@@ -84,10 +93,7 @@ class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
         );
       }),
       _drawerTile(Icons.logout, 'Logout', () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => LoginScreen()),
-        );
+        _onLogout();
       }),
     ];
   }
