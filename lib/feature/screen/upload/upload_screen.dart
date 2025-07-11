@@ -1,4 +1,3 @@
-
 import 'package:intl/intl.dart';
 import 'package:online_doc_savimex/app_import.dart';
 
@@ -15,16 +14,14 @@ class _UploadScreenState extends State<UploadScreen> {
   DateTime? selectedDate;
   List<DocumentType> type = [];
   DocumentType? selectedType;
+
   final TextEditingController _dateController = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
 
-
-  bool isloading = false;
-
-  List<int> additionalFiles = [];
-  int fileIdCounter = 0;
-  String _error     = '';
+  final List<UploadBlock> _blocks = [UploadBlock()];
+  bool isLoading = false;
+  String _error = '';
 
   void _pickDate() async {
     DateTime? picked = await showDatePicker(
@@ -42,28 +39,39 @@ class _UploadScreenState extends State<UploadScreen> {
     }
   }
 
+  void _addBlock() {
+    setState(() {
+      _blocks.add(UploadBlock());
+    });
+  }
+
+  void _undoBlock() {
+    if (_blocks.length > 1) {
+      setState(() {
+        _blocks.removeLast();
+      });
+    }
+  }
 
   Future<void> _loadDoctype() async {
     try {
-      final d_type = await fetchDocTypes();
-      setState(() => type = d_type);
+      final dType = await fetchDocTypes();
+      setState(() => type = dType);
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load types: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load types: $e')),
+      );
     }
   }
 
   Future<void> _onSubmit() async {
-
-    if (!_formKey.currentState!.validate()) {
-      return; // validation will show errors
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() {
-      isloading = true;
-      _error     = '';
+      isLoading = true;
+      _error = '';
     });
+
     try {
       await addDocument(
         selectedType?.id,
@@ -79,22 +87,22 @@ class _UploadScreenState extends State<UploadScreen> {
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
-      setState(() => isloading = false);
+      setState(() => isLoading = false);
     }
-  }
-
-
-  @override
-  void dispose() {
-    _dateController.dispose();
-    super.dispose();
   }
 
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
     _loadDoctype();
+  }
+
+  @override
+  void dispose() {
+    _dateController.dispose();
+    _titleController.dispose();
+    _descController.dispose();
+    super.dispose();
   }
 
   @override
@@ -104,10 +112,7 @@ class _UploadScreenState extends State<UploadScreen> {
         leading: const BackButton(color: Colors.black),
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'Document form',
-          style: TextStyle(color: Colors.black),
-        ),
+        title: const Text('Document form', style: TextStyle(color: Colors.black)),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -125,8 +130,7 @@ class _UploadScreenState extends State<UploadScreen> {
                     hintText: 'document title',
                     border: OutlineInputBorder(),
                   ),
-                  validator: (v) =>
-                  v == null || v.isEmpty ? 'Title is required' : null,
+                  validator: (v) => v == null || v.isEmpty ? 'Title is required' : null,
                 ),
                 const SizedBox(height: 16),
 
@@ -140,25 +144,14 @@ class _UploadScreenState extends State<UploadScreen> {
                           hintText: 'choose document type',
                           border: OutlineInputBorder(),
                         ),
-                        items:
-                            type
-                                .map(
-                                  (dt) => DropdownMenuItem(
-                                    value: dt,
-                                    child: Text(dt.docTitle),
-                                  ),
-                                )
-                                .toList(),
-                        onChanged: (dt) {
-                          setState(() {
-                            selectedType = dt;
-                          });
-                        },
-                        validator:
-                            (_) =>
-                                selectedType == null
-                                    ? 'Please select a type'
-                                    : null,
+                        items: type
+                            .map((dt) => DropdownMenuItem(
+                          value: dt,
+                          child: Text(dt.docTitle),
+                        ))
+                            .toList(),
+                        onChanged: (dt) => setState(() => selectedType = dt),
+                        validator: (_) => selectedType == null ? 'Please select a type' : null,
                       ),
                     ),
                     IconButton(
@@ -183,46 +176,40 @@ class _UploadScreenState extends State<UploadScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                const LabelWithAsterisk(
-                  'Upload your file: (image, pdf, word, excel...)',
-                ),
+                const LabelWithAsterisk('Upload your file: (image, pdf, word, excel...)'),
                 const SizedBox(height: 8),
-                UploadBlock(),
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      additionalFiles.add(fileIdCounter++);
-                    });
-                  },
-                  child: Row(
-                    children: const [
-                      Icon(Icons.add_circle_outline, color: Colors.blue),
-                      SizedBox(width: 4),
-                      Text(
-                        'Add more file',
-                        style: TextStyle(color: Colors.blue),
+                // Dynamic list of upload blocks
+                for (int i = 0; i < _blocks.length; i++) ...[
+                  if (i == _blocks.length - 1 && i > 0)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: _undoBlock,
+                        icon: const Icon(Icons.undo),
+                        label: const Text('Undo'),
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                if (additionalFiles.isNotEmpty)
-                  Column(
-                    children: [
-                      for (var id in additionalFiles)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16.0),
-                          child: UploadBlock(
-                            onRemove: () {
-                              setState(() {
-                                additionalFiles.remove(id);
-                              });
-                            },
-                          ),
+                    ),
+
+                  _blocks[i],
+
+                  if (i == _blocks.length - 1)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: GestureDetector(
+                        onTap: _addBlock,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.add_circle_outline, color: Colors.blue),
+                            SizedBox(width: 4),
+                            Text('Add more file', style: TextStyle(color: Colors.blue)),
+                          ],
                         ),
-                    ],
-                  ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 16),
+                ],
 
                 const SizedBox(height: 16),
                 const Text('Schedule date'),
@@ -247,20 +234,11 @@ class _UploadScreenState extends State<UploadScreen> {
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 50,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                     ),
-                    onPressed:_onSubmit,
-                    child:
-                    const Text(
-                      'Submit',
-                      style: TextStyle(fontSize: 16, color: Colors.white),
-                    ),
+                    onPressed: _onSubmit,
+                    child: const Text('Submit', style: TextStyle(fontSize: 16, color: Colors.white)),
                   ),
                 ),
               ],
@@ -282,9 +260,7 @@ class LabelWithAsterisk extends StatelessWidget {
       text: TextSpan(
         text: label,
         style: const TextStyle(color: Colors.black, fontSize: 16),
-        children: const [
-          TextSpan(text: ' *', style: TextStyle(color: Colors.red)),
-        ],
+        children: const [TextSpan(text: ' *', style: TextStyle(color: Colors.red))],
       ),
     );
   }

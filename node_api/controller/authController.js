@@ -91,7 +91,8 @@ exports.register = [
 
 
 exports.login = async (req, res) => {
-  const { em_id, password } = req.body;
+  const { em_id, password, rememberMe } = req.body;
+
   if (!em_id || !password) {
     return res.status(400).json({ error: 'Missing fields' });
   }
@@ -110,15 +111,18 @@ exports.login = async (req, res) => {
     }
 
     const payload = { id: employee.id, em_id: employee.em_id };
-    const token = jwt.sign(
-        payload,
-        process.env.JWT_SECRET,
-        { expiresIn: '1h' }
-    );
+
+    const accessTtl = rememberMe ? '1h' : '15m';
+    const refreshTtl = rememberMe ? '30d' : '1d';
+
+    const accessToken = jwt.sign(payload, process.env.JWT_SECRET_ACCESS, {expiresIn: accessTtl});
+    const refreshToken = jwt.sign(payload, process.env.JWT_SECRET_REFRESH, {expiresIn: refreshTtl});
+
     res.json(
         {
             message: 'Login successful',
-            token,
+            accessToken,
+            refreshToken,
             employee: {
                         id:            employee.id,
                         employee_name: employee.employee_name,
@@ -131,5 +135,27 @@ exports.login = async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// In authController.js
+exports.refresh = async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) {
+    return res.status(400).json({ error: 'Missing refresh token' });
+  }
+  try {
+    const payload = jwt.verify(refreshToken, process.env.JWT_SECRET_REFRESH);
+    // Issue a fresh short‐lived access token
+    const newAccess  = jwt.sign({ id: payload.id, em_id: payload.em_id },
+                                process.env.JWT_SECRET_ACCESS,
+                                { expiresIn: '15m' });
+    // (Optionally) rotate your refresh token:
+    const newRefresh = jwt.sign({ id: payload.id, em_id: payload.em_id },
+                                process.env.JWT_SECRET_REFRESH,
+                                { expiresIn: '30d' });
+    return res.json({ accessToken: newAccess, refreshToken: newRefresh });
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid refresh token' });
   }
 };

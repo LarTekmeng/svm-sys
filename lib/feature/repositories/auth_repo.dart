@@ -39,20 +39,23 @@ class AuthRepository {
     final res = await http.post(
       Uri.parse('$_baseUrl/api/auth/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'em_id': employeeID, 'password': password}),
+      body: jsonEncode({'em_id': employeeID, 'password': password, 'rememberMe': rememberMe}),
     );
     if (res.statusCode != 200) throw Exception('Login failed ${res.body}');
     final data = jsonDecode(res.body) as Map<String, dynamic>;
-    final token    = data['token']    as String;
+    final accessToken = data['accessToken'] as String;
+    final refreshToken = data['refreshToken'] as String;
     final empMap   = data['employee'] as Map<String, dynamic>;
     final employee = Employee.fromJson(empMap);
 
     if(rememberMe){
-      await _storage.writeToken(token);
+      await _storage.writeAccessToken(accessToken);
+      await _storage.writeRefreshToken(refreshToken);
       await _storage.writeEmployee(jsonEncode(empMap));
     }
     else{
-      await _storage.deleteToken();
+      await _storage.deleteAccessToken();
+      await _storage.deleteRefreshToken();
       await _storage.deleteEmployee();
     }
 
@@ -63,11 +66,27 @@ class AuthRepository {
     await _storage.clearAll();
   }
 
-  Future<bool> hasValidToken() async{
-    final token = await _storage.readToken();
-    if (token == null) return false;
-    return !Jwt.isExpired(token);
+  Future<bool> hasValidToken() async {
+    final at = await _storage.readAccessToken();
+    if (at != null && !Jwt.isExpired(at)) return true;
+
+    // if access token is gone or expired, try refreshing:
+    final rt = await _storage.readRefreshToken();
+    if (rt == null || Jwt.isExpired(rt)) return false;
+
+    final res = await http.post(
+      Uri.parse('$_baseUrl/api/auth/refresh'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({ 'refreshToken': rt }),
+    );
+    if (res.statusCode != 200) return false;
+
+    final data = jsonDecode(res.body);
+    await _storage.writeAccessToken(data['accessToken']);
+    await _storage.writeRefreshToken(data['refreshToken']);
+    return true;
   }
+
 
   Future<Employee?> getPersistedEmployee() async {
     final employeeJson = await _storage.readEmployee();
