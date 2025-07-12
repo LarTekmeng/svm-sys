@@ -61,6 +61,7 @@ class DocTypeCard extends StatelessWidget {
                       icon: Icons.edit,
                       onTap: () async{final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (context)=> CreateDocumentTypeScreen(
                         existing: DocumentType(id: id, docTitle: title, docDesc: description),
+
                       )));
                         if(changed == true) onDeleted();
                       }),

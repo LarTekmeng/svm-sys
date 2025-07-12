@@ -1,10 +1,11 @@
 // routes/docTypes.js
 const router = require('express').Router();
 const ctrl   = require('../controller/docTypeController');
-router.post('/add', ctrl.create);
-router.get('/list',  ctrl.list);
+const authMiddleware = require('../middleware/authMiddleware');
+router.post('/add', authMiddleware, ctrl.create);
+router.get('/list', authMiddleware,  ctrl.list);
 router.delete('/:id', ctrl.delete);
 router.put('/:id', ctrl.update);
-router.get('/:em_id', ctrl.list_by_em_id);
+router.get('/:em_id', authMiddleware, ctrl.get_by_id);
 
 module.exports = router;

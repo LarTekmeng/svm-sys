@@ -83,16 +83,16 @@ exports.update = async (req, res) => {
 };
 
 /* List document type by em_id */
-exports.list_by_em_id = async (req, res) => {
+exports.get_by_id = async (req, res) => {
     const em_id = req.employee?.em_id;
     if (!em_id) return res.status(401).json({ error:'Not Authenticated' });
     try{
         const rows = await db.any(
-            'SELECT id, name, description FROM doctype WHERE em_id = $1',
+            'SELECT name, description FROM doctype WHERE em_id = $1',
             [em_id]
         );
+        res.json(rows);
     }
-    res.json(rows);
     catch (e){
         console.error(e);
         res.status(500).json({ error: 'Error fetching document types' });

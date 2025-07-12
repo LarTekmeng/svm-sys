@@ -1,4 +1,5 @@
 import 'package:online_doc_savimex/app_import.dart';
+import 'package:online_doc_savimex/feature/repositories/doctype_repo.dart';
 
 class DocumentTypeScreen extends StatefulWidget {
   final String employeeID;
@@ -9,6 +10,7 @@ class DocumentTypeScreen extends StatefulWidget {
 }
 
 class _DocumentTypeScreenState extends State<DocumentTypeScreen> {
+  final _repo = DoctypeRepository();
   late Future<List<DocumentType>> _futureDocTypes;
 
   @override
@@ -19,7 +21,7 @@ class _DocumentTypeScreenState extends State<DocumentTypeScreen> {
 
   void _loadType(){
     setState(() {
-      _futureDocTypes = fetchDocTypes();
+      _futureDocTypes = _repo.getDoctypeById(widget.employeeID);
     });
   }
 
