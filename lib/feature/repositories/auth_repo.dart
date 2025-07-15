@@ -94,4 +94,9 @@ class AuthRepository {
     final Map<String, dynamic> empMap = jsonDecode(employeeJson) as Map<String, dynamic>;
     return Employee.fromJson(empMap);
   }
+
+  Future<String?> getPersistedToken() async {
+    return await _storage.readAccessToken();
+  }
+
 }

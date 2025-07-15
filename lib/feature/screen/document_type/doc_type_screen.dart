@@ -11,19 +11,53 @@ class DocumentTypeScreen extends StatefulWidget {
 
 class _DocumentTypeScreenState extends State<DocumentTypeScreen> {
   final _repo = DoctypeRepository();
+  final _authRepo = AuthRepository();
   late Future<List<DocumentType>> _futureDocTypes;
 
   @override
   void initState() {
     super.initState();
-    _loadType();
+    _futureDocTypes = _prepareDocTypes();
   }
 
-  void _loadType(){
-    setState(() {
-      _futureDocTypes = _repo.getDoctypeById(widget.employeeID);
-    });
+  Future<List<DocumentType>> _prepareDocTypes() async {
+    final authState = context.read<AuthLoginBloc>().state;
+    if (authState is! AuthAuthenticated) {
+      Navigator.of(context)
+          .pushReplacementNamed('/login');
+      return <DocumentType>[];  // return an empty list so FutureBuilder completes
+    }
+
+    final emId  = authState.employee.employeeID;
+    final token = await _authRepo.getPersistedToken();
+    if (token == null) {
+      Navigator.of(context)
+          .pushReplacementNamed('/login');
+      return <DocumentType>[];
+    }
+
+    // simply *return* the repo call
+    return _repo.getDoctypeById(emId, token);
   }
+
+  // void _loadType() async {
+  //   final authState = context.read<AuthLoginBloc>().state;
+  //   if(authState is! AuthAuthenticated){
+  //     Navigator.of(context).pushReplacementNamed('/login');
+  //     return;
+  //   }
+  //   final emId = authState.employee.employeeID;
+  //   final token = await _authRepo.getPersistedToken();
+  //   if( token == null){
+  //     Navigator.of(context).pushReplacementNamed('/login');
+  //     return;
+  //   }
+  //   setState(() {
+  //     _futureDocTypes = _repo.getDoctypeById(emId, token);
+  //   });
+  // }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -89,7 +123,7 @@ class _DocumentTypeScreenState extends State<DocumentTypeScreen> {
                             id: dt.id as int,
                             title: dt.docTitle,
                             description: dt.docDesc,
-                            onDeleted:   _loadType,
+                            onDeleted:   _prepareDocTypes,
                           ),
                         );
                       },
@@ -118,7 +152,7 @@ class _DocumentTypeScreenState extends State<DocumentTypeScreen> {
                       builder: (_) => const CreateDocumentTypeScreen(),
                     ),
                   );
-                  if (created == true) _loadType();
+                  if (created == true) _prepareDocTypes();
                 },
                 child: const Text(
                   'New Document Type',

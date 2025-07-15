@@ -6,6 +6,6 @@ router.post('/add', authMiddleware, ctrl.create);
 router.get('/list', authMiddleware,  ctrl.list);
 router.delete('/:id', ctrl.delete);
 router.put('/:id', ctrl.update);
-router.get('/:em_id', authMiddleware, ctrl.get_by_id);
+router.get('/:em_id', authMiddleware, ctrl.getId);
 
 module.exports = router;

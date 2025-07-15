@@ -77,10 +77,16 @@ class DoctypeRepository{
   /*=====*/
 
   /* List all document type of each user that has been create */
-  Future<List<DocumentType>> getDoctypeById(String employeeId) async {
-    final uri = Uri.parse('$_baseUrl/api/doctypes/$employeeId');
-    final resp = await http.get(uri);
+  Future<List<DocumentType>> getDoctypeById(String em_id, String jwtToken) async {
+    final uri = Uri.parse('$_baseUrl/api/doctypes/$em_id');
+    final resp = await http.get(
+        uri,
+      headers: {
+          'Content-Type' : 'application/json', 'Authorization' : 'Bearer $jwtToken',
+      },
+    );
     if(resp.statusCode != 200){
+      print('ERR ${resp.statusCode} : ${resp.body}');
       throw Exception('Failed to load Document Types (status ${resp.statusCode})');
     }
     final List body = jsonDecode(resp.body) as List;

@@ -83,12 +83,12 @@ exports.update = async (req, res) => {
 };
 
 /* List document type by em_id */
-exports.get_by_id = async (req, res) => {
+exports.getId = async (req, res) => {
     const em_id = req.employee?.em_id;
     if (!em_id) return res.status(401).json({ error:'Not Authenticated' });
     try{
         const rows = await db.any(
-            'SELECT name, description FROM doctype WHERE em_id = $1',
+            'SELECT id, name, description FROM doctype WHERE em_id = $1',
             [em_id]
         );
         res.json(rows);
