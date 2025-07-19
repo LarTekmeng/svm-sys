@@ -111,12 +111,13 @@ exports.login = async (req, res) => {
     }
 
     const payload = { id: employee.id, em_id: employee.em_id };
+    const refreshPayload = { id: employee.id, em_id: employee.em_id, rememberMe };
 
     const accessTtl = rememberMe ? '1h' : '15m';
-    const refreshTtl = rememberMe ? '30d' : '1d';
+    const refreshTtl = rememberMe ? '30d' : '30m';
 
     const accessToken = jwt.sign(payload, process.env.JWT_SECRET_ACCESS, {expiresIn: accessTtl});
-    const refreshToken = jwt.sign(payload, process.env.JWT_SECRET_REFRESH, {expiresIn: refreshTtl});
+    const refreshToken = jwt.sign(refreshPayload, process.env.JWT_SECRET_REFRESH, {expiresIn: refreshTtl});
 
     res.json(
         {
@@ -151,9 +152,10 @@ exports.refresh = async (req, res) => {
                                 process.env.JWT_SECRET_ACCESS,
                                 { expiresIn: '15m' });
     // (Optionally) rotate your refresh token:
-    const newRefresh = jwt.sign({ id: payload.id, em_id: payload.em_id },
+    const newfreshTtl = payload.rememberMe ? '30d' : '30m';
+    const newRefresh = jwt.sign({ id: payload.id, em_id: payload.em_id, rememberMe: payload.rememberMe },
                                 process.env.JWT_SECRET_REFRESH,
-                                { expiresIn: '30d' });
+                                { expiresIn: newfreshTtl });
     return res.json({ accessToken: newAccess, refreshToken: newRefresh });
   } catch (err) {
     return res.status(401).json({ error: 'Invalid refresh token' });

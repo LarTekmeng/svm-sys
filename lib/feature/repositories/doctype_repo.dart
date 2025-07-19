@@ -5,14 +5,18 @@ import '../../app_import.dart';
 class DoctypeRepository{
 
   final String _baseUrl = getLocalhost();
+  final AuthRepository _authRepo = AuthRepository.instance;
 
   /* Create new document type */
-  Future<Map<String, dynamic>> newDocType(String title, String description, String employeeId) async {
+  Future<Map<String, dynamic>> newDocType(String title, String description) async {
+    final token = await _authRepo.getPersistedToken();
+    print('🔑 Persisted token = $token');
+    assert(token != null && token.isNotEmpty, 'No JWT in storage!');
     final uri = Uri.parse('$_baseUrl/api/doctypes/add');
     final resp = await http.post(
       uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'doc_title': title, 'doc_desc': description, 'em_id': employeeId}),
+      headers: {'Content-Type' : 'application/json', 'Authorization' : 'Bearer $token'},
+      body: jsonEncode({'doc_title': title, 'doc_desc': description}),
     );
 
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
@@ -77,12 +81,13 @@ class DoctypeRepository{
   /*=====*/
 
   /* List all document type of each user that has been create */
-  Future<List<DocumentType>> getDoctypeById(String em_id, String jwtToken) async {
+  Future<List<DocumentType>> getDoctypeById(String em_id) async {
+    final token = await _authRepo.getPersistedToken();
     final uri = Uri.parse('$_baseUrl/api/doctypes/$em_id');
     final resp = await http.get(
         uri,
       headers: {
-          'Content-Type' : 'application/json', 'Authorization' : 'Bearer $jwtToken',
+          'Content-Type' : 'application/json', 'Authorization' : 'Bearer $token',
       },
     );
     if(resp.statusCode != 200){

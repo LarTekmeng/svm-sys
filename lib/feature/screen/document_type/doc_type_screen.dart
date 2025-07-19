@@ -10,53 +10,47 @@ class DocumentTypeScreen extends StatefulWidget {
 }
 
 class _DocumentTypeScreenState extends State<DocumentTypeScreen> {
-  final _repo = DoctypeRepository();
-  final _authRepo = AuthRepository();
+  late final DoctypeRepository _repo;
+  late final AuthRepository     _authRepo;
   late Future<List<DocumentType>> _futureDocTypes;
 
   @override
-  void initState() {
-    super.initState();
-    _futureDocTypes = _prepareDocTypes();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _repo     = context.read<DoctypeRepository>();
+    _authRepo = context.read<AuthRepository>();
+    _loadDocTypes();
+  }
+
+  void _loadDocTypes() {
+    setState(() {
+      _futureDocTypes = _prepareDocTypes();
+    });
   }
 
   Future<List<DocumentType>> _prepareDocTypes() async {
     final authState = context.read<AuthLoginBloc>().state;
+    // If not authenticated, kick to login screen
     if (authState is! AuthAuthenticated) {
-      Navigator.of(context)
-          .pushReplacementNamed('/login');
-      return <DocumentType>[];  // return an empty list so FutureBuilder completes
+      redirectToLogin();
+      return [];
     }
 
-    final emId  = authState.employee.employeeID;
-    final token = await _authRepo.getPersistedToken();
-    if (token == null) {
-      Navigator.of(context)
-          .pushReplacementNamed('/login');
-      return <DocumentType>[];
+    // Even if authenticated, check if token is still valid or refresh it
+    final isValid = await _authRepo.hasValidToken();
+    if (!isValid) {
+      redirectToLogin();
+      return [];
     }
-
-    // simply *return* the repo call
-    return _repo.getDoctypeById(emId, token);
+    // Proceed with loading the document types
+    return _repo.getDoctypeById(authState.employee.employeeID);
   }
 
-  // void _loadType() async {
-  //   final authState = context.read<AuthLoginBloc>().state;
-  //   if(authState is! AuthAuthenticated){
-  //     Navigator.of(context).pushReplacementNamed('/login');
-  //     return;
-  //   }
-  //   final emId = authState.employee.employeeID;
-  //   final token = await _authRepo.getPersistedToken();
-  //   if( token == null){
-  //     Navigator.of(context).pushReplacementNamed('/login');
-  //     return;
-  //   }
-  //   setState(() {
-  //     _futureDocTypes = _repo.getDoctypeById(emId, token);
-  //   });
-  // }
-
+  void redirectToLogin(){
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Navigator.of(context).pushReplacementNamed('/login');
+    });
+  }
 
 
   @override
@@ -66,7 +60,7 @@ class _DocumentTypeScreenState extends State<DocumentTypeScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF006080),
         leading: IconButton(
-          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => Homescreen(employeeID: widget.employeeID,))),
+          onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
         ),
       ),
@@ -84,27 +78,25 @@ class _DocumentTypeScreenState extends State<DocumentTypeScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              // Search bar
               const SearchBarField(showIcon: false),
               const SizedBox(height: 20),
 
-              // List of document types
               Expanded(
                 child: FutureBuilder<List<DocumentType>>(
                   future: _futureDocTypes,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
+                  builder: (ctx, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
                     }
-                    if (snapshot.hasError) {
+                    if (snap.hasError) {
                       return Center(
                         child: Text(
-                          'Error: ${snapshot.error}',
+                          'Error: ${snap.error}',
                           style: const TextStyle(color: Colors.white),
                         ),
                       );
                     }
-                    final docTypes = snapshot.data!;
+                    final docTypes = snap.data!;
                     if (docTypes.isEmpty) {
                       return const Center(
                         child: Text(
@@ -115,15 +107,15 @@ class _DocumentTypeScreenState extends State<DocumentTypeScreen> {
                     }
                     return ListView.builder(
                       itemCount: docTypes.length,
-                      itemBuilder: (context, index) {
-                        final dt = docTypes[index];
+                      itemBuilder: (ctx, i) {
+                        final dt = docTypes[i];
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: DocTypeCard(
                             id: dt.id as int,
                             title: dt.docTitle,
                             description: dt.docDesc,
-                            onDeleted:   _prepareDocTypes,
+                            onDeleted: _loadDocTypes,
                           ),
                         );
                       },
@@ -132,7 +124,6 @@ class _DocumentTypeScreenState extends State<DocumentTypeScreen> {
                 ),
               ),
 
-              // New Document Type button
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
@@ -145,14 +136,13 @@ class _DocumentTypeScreenState extends State<DocumentTypeScreen> {
                   ),
                 ),
                 onPressed: () async {
-                  final created = await
-                  Navigator.push<bool>(
+                  final created = await Navigator.push<bool>(
                     context,
                     MaterialPageRoute(
                       builder: (_) => const CreateDocumentTypeScreen(),
                     ),
                   );
-                  if (created == true) _prepareDocTypes();
+                  if (created == true) _loadDocTypes();
                 },
                 child: const Text(
                   'New Document Type',

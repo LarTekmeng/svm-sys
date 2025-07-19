@@ -1,18 +1,27 @@
 import 'package:online_doc_savimex/feature/presentation/splash_screen.dart';
+import 'package:online_doc_savimex/feature/repositories/doctype_repo.dart';
 
 import 'app_import.dart';
 
-void main() {
+void main() async {
+
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final authRepo = AuthRepository.instance;
+  await authRepo.init();
+
+  final departmentRepo = DepartmentRepository();
+  final employeeRepo   = EmployeeRepository();
+  final doctypeRepo = DoctypeRepository();
+
+
   runApp(
     MultiRepositoryProvider(
       providers: [
-        RepositoryProvider<AuthRepository>(create: (_) => AuthRepository()),
-        RepositoryProvider<DepartmentRepository>(
-          create: (_) => DepartmentRepository(),
-        ),
-        RepositoryProvider<EmployeeRepository>(
-          create: (_) => EmployeeRepository(),
-        ),
+        RepositoryProvider<AuthRepository>.value(value: authRepo,),
+        RepositoryProvider<DepartmentRepository>.value(value: departmentRepo,),
+        RepositoryProvider<EmployeeRepository>.value(value: employeeRepo,),
+        RepositoryProvider<DoctypeRepository>.value(value: doctypeRepo,)
       ],
       child: MultiBlocProvider(
         providers: [

@@ -10,7 +10,7 @@ class DrawerHomeScreen extends StatefulWidget {
 
 class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
   late Future<Employee> _employee;
-  final AuthRepository _authRepo = AuthRepository();
+  final AuthRepository _authRepo = AuthRepository.instance;
 
   @override
   void initState() {

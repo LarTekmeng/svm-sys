@@ -15,7 +15,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passCtrl = TextEditingController();
   bool _rememberMe = false;
   bool _isloading = false;
-  final AuthRepository _authRepo = AuthRepository();
+  final AuthRepository _authRepo = AuthRepository.instance;
 
   @override
   void dispose() {

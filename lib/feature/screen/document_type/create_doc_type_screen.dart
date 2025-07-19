@@ -1,4 +1,5 @@
 import 'package:online_doc_savimex/app_import.dart';
+import 'package:online_doc_savimex/feature/repositories/doctype_repo.dart';
 
 class CreateDocumentTypeScreen extends StatefulWidget {
   final DocumentType? existing;
@@ -43,7 +44,7 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
     try {
       if (widget.existing == null) {
         // CREATE
-        await newDocType(
+        await DoctypeRepository().newDocType(
           _titleController.text.trim(),
           _descriptionController.text.trim(),
         );

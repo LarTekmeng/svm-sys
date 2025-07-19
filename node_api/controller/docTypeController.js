@@ -4,8 +4,8 @@ const db = require('../db');
 exports.create = async (req, res) => {
     const { doc_title, doc_desc } = req.body;
     const em_id = req.employee?.em_id;
-    if (!doc_title || !doc_desc) {
-        return res.status(400).json({ error: 'Missing fields or authentication' });
+    if (!doc_title || !doc_desc || !em_id ) {
+        return res.status(400).json({ error: 'Missing fields or not authenticated' });
     }
     try {
         const result = await db.one(
