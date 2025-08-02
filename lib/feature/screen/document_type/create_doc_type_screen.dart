@@ -50,7 +50,7 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
         );
       } else {
         // UPDATE
-        await updateDocType(
+        await DoctypeRepository().updateDocType(
           widget.existing!.id!,
           _titleController.text.trim(),
           _descriptionController.text.trim(),

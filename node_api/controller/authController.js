@@ -56,23 +56,18 @@ exports.register = [
         const timestamp = Date.now();
         const key       = `employees/${employeeId}/${timestamp}-${file.originalname}`;
         await uploadToR2(key, file.buffer, file.mimetype);
-        const fileUrl = `${process.env.R2_PUBLIC_URL}/${key}`
+        const fileUrl = `${process.env.R2_PUBLIC_URL_PROFILE}/${key}`
 ;
 
         await db.none(
-          `INSERT INTO file_upload
+          `INSERT INTO employee_images
              (employee_id, file_name, file_type, file_size_bytes, file_url)
            VALUES ($1, $2, $3, $4, $5)`,
           [
-            employeeId,
-            file.originalname,
-            file.mimetype,
-            file.size,
-            fileUrl
+            employeeId, file.originalname, file.mimetype, file.size, fileUrl
           ]
         );
       }
-
       // 6) respond
       res.status(201).json({
         message: 'Registered successfully',

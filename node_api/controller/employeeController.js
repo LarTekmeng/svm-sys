@@ -23,10 +23,10 @@ exports.getByEmployeeId = async (req, res) => {
          e.dp_id,
          e.em_id,
          d.name AS dp_name,
-         f.file_url
+         i.file_url
        FROM employee e
        LEFT JOIN department d ON e.dp_id = d.id
-       LEFT JOIN file_upload f ON e.id = f.employee_id
+       LEFT JOIN employee_images i ON e.id = i.employee_id
        WHERE e.em_id = $1`,
       [employeeId]
     );

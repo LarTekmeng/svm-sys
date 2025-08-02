@@ -33,8 +33,9 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool stepDisabled = selectedAction == 'Read-Only';
+
     return Scaffold(
-      //appBar: AppBar(backgroundColor: Colors.transparent,),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
@@ -52,24 +53,35 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
               ),
               const SizedBox(height: 20),
               const Text('Document type action:'),
-              RadioListTile(
+              RadioListTile<String>(
                 title: const Text('Read Only'),
                 value: 'Read-Only',
                 groupValue: selectedAction,
-                onChanged: (val) => setState(() => selectedAction = val!),
+                onChanged: (val) => setState(() {
+                  selectedAction = val!;
+                  // Reset forward mode if switching to Read-Only
+                  if (selectedAction == 'Read-Only') {
+                    isStepExpanded = false;
+                    stepList = [0, 1];
+                  }
+                }),
               ),
-              RadioListTile(
+              RadioListTile<String>(
                 title: const Text('Ask for Permission'),
                 value: 'Ask for Permission',
                 groupValue: selectedAction,
-                onChanged: (val) => setState(() => selectedAction = val!),
+                onChanged: (val) => setState(() {
+                  selectedAction = val!;
+                }),
               ),
               const SizedBox(height: 10),
               const Text('Forward to:'),
+
+              // Direct Section
               IgnorePointer(
-                ignoring: isStepExpanded, // disable if Step by Step is active
+                ignoring: isStepExpanded,
                 child: Opacity(
-                  opacity: isStepExpanded ? 0.4 : 1,
+                  opacity: isStepExpanded ? 0.4 : 1.0,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -77,20 +89,19 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
                         onTap: () {
                           setState(() {
                             isDirectExpanded = !isDirectExpanded;
-                            isStepExpanded = false; // close the other section
+                            isStepExpanded = false;
                             selectedForwardMode =
-                                isDirectExpanded ? 'Direct' : '';
-                            directList = [0]; // reset to default
+                            isDirectExpanded ? 'Direct' : '';
+                            directList = [0];
                           });
                         },
                         child: Text(
                           '${isDirectExpanded ? '➖' : '➕'} Direct',
                           style: TextStyle(
                             color: isStepExpanded ? Colors.grey : Colors.blue,
-                            fontWeight:
-                                isDirectExpanded
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
+                            fontWeight: isDirectExpanded
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                           ),
                         ),
                       ),
@@ -116,32 +127,35 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
               ),
 
               const SizedBox(height: 10),
-              // Step by Step Section Toggle
+
+              // Step-by-Step Section
               IgnorePointer(
-                ignoring: isDirectExpanded, // disable if Direct is active
+                ignoring: isDirectExpanded || stepDisabled,
                 child: Opacity(
-                  opacity: isDirectExpanded ? 0.4 : 1,
+                  opacity: (isDirectExpanded || stepDisabled) ? 0.4 : 1.0,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       GestureDetector(
                         onTap: () {
+                          if (stepDisabled) return;
                           setState(() {
                             isStepExpanded = !isStepExpanded;
-                            isDirectExpanded = false; // close the other section
+                            isDirectExpanded = false;
                             selectedForwardMode =
-                                isStepExpanded ? 'Step by Step' : '';
-                            stepList = [0, 1]; // reset to default
+                            isStepExpanded ? 'Step by Step' : '';
+                            stepList = [0, 1];
                           });
                         },
                         child: Text(
                           '${isStepExpanded ? '➖' : '➕'} Step by Step',
                           style: TextStyle(
-                            color: isDirectExpanded ? Colors.grey : Colors.blue,
-                            fontWeight:
-                                isStepExpanded
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
+                            color: (isDirectExpanded || stepDisabled)
+                                ? Colors.grey
+                                : Colors.blue,
+                            fontWeight: isStepExpanded
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                           ),
                         ),
                       ),
@@ -165,25 +179,26 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
                   ),
                 ),
               ),
-              // Direct Section Toggle
             ],
           ),
         ),
       ),
       bottomNavigationBar: Padding(
-        padding: EdgeInsets.fromLTRB(20,0,20,50),
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 50),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             ElevatedButton(
               onPressed: () {},
               style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-              child: const Text('Confirm', style: TextStyle(color: Colors.white),),
+              child: const Text('Confirm',
+                  style: TextStyle(color: Colors.white)),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white),),
+              child:
+              const Text('Cancel', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),

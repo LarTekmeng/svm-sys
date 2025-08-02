@@ -16,7 +16,7 @@ class DoctypeRepository{
     final resp = await http.post(
       uri,
       headers: {'Content-Type' : 'application/json', 'Authorization' : 'Bearer $token'},
-      body: jsonEncode({'doc_title': title, 'doc_desc': description}),
+      body: jsonEncode({'title': title, 'description': description}),
     );
 
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
@@ -29,23 +29,14 @@ class DoctypeRepository{
   }
   /*=====*/
 
-  /* List all the document type */
-  Future<List<DocumentType>> fetchDocTypes() async {
-    final resp = await http.get(Uri.parse('$_baseUrl/api/doctypes/list'));
-    if (resp.statusCode != 200) {
-      throw Exception('Failed to load document types (status ${resp.statusCode})');
-    }
-    final List<dynamic> body = jsonDecode(resp.body) as List<dynamic>;
-    return body
-        .map((e) => DocumentType.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-  /*=====*/
-
   /* Delete document type */
   Future<int> deleteDocType(int id) async {
+    final token = await _authRepo.getPersistedToken();
     final uri  = Uri.parse('$_baseUrl/api/doctypes/$id');
-    final resp = await http.delete(uri);
+    final resp = await http.delete(
+      uri,
+        headers: {'Authorization' : 'Bearer $token'}
+    );
 
     if (resp.statusCode != 200) {
       throw Exception(
@@ -61,11 +52,12 @@ class DoctypeRepository{
 
   /* Update document type */
   Future<int> updateDocType(int id, String title, String description) async {
+    final token = await _authRepo.getPersistedToken();
     final uri  = Uri.parse('$_baseUrl/api/doctypes/$id');
     final resp = await http.put(
         uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'doc_title':title, 'doc_desc':description})
+        headers: {'Content-Type': 'application/json', 'Authorization' : 'Bearer $token'},
+        body: jsonEncode({'title':title, 'description':description})
     );
 
     if (resp.statusCode != 200) {
@@ -81,9 +73,9 @@ class DoctypeRepository{
   /*=====*/
 
   /* List all document type of each user that has been create */
-  Future<List<DocumentType>> getDoctypeById(String em_id) async {
+  Future<List<DocumentType>> getDoctypeById(String id) async {
     final token = await _authRepo.getPersistedToken();
-    final uri = Uri.parse('$_baseUrl/api/doctypes/$em_id');
+    final uri = Uri.parse('$_baseUrl/api/doctypes/$id');
     final resp = await http.get(
         uri,
       headers: {

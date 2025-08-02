@@ -1,6 +1,7 @@
 
 import 'package:flutter/cupertino.dart';
 import 'package:online_doc_savimex/app_import.dart';
+import 'package:online_doc_savimex/feature/repositories/doctype_repo.dart';
 
 class DocTypeCard extends StatelessWidget {
   final int id;
@@ -117,7 +118,7 @@ class DocTypeCard extends StatelessWidget {
     );
     if (ok != true) return;
     try {
-      await deleteDocType(id);
+      await DoctypeRepository().deleteDocType(id);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Deleted "$title"')));

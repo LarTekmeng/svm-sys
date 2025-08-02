@@ -33,11 +33,17 @@ class RegisterBloc extends Bloc<RegisterEvent, RegisterState> {
     emit(RegisterLoading());
     try {
       await _authRepo.registerEmployee(
-        event.employeeName,
-        event.email,
-        event.password,
-        event.departmentID,
-        event.employeeID,
+        // event.employeeName,
+        // event.email,
+        // event.password,
+        // event.departmentID,
+        // event.employeeID,
+        // profileImage : event.profileImage,
+        name: event.employeeName,
+        email: event.email,
+        password: event.password,
+        departmentID: event.departmentID,
+        employeeID: event.employeeID,
         profileImage: event.profileImage,
       );
       emit(RegisterSuccess());

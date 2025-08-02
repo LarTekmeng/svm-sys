@@ -14,7 +14,7 @@ class DocumentType {
   factory DocumentType.fromJson(Map<String, dynamic> json) {
     return DocumentType(
       id: json['id'] as int?,
-      docTitle: (json['name'] as String?) ?? '',
+      docTitle: (json['title'] as String?) ?? '',
       docDesc:  (json['description'] as String?) ?? '',
     );
   }

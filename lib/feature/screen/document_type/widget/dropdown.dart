@@ -20,9 +20,8 @@ Widget buildDropdownRow() {
       const SizedBox(width: 8),
       Expanded(
         child: dropdownField('Action', [
-          'Approve', /* this equal checked at then push to Approve & Signature */
-          'Approve & Signature', /* normally use when top position in the company like CEO or Head of Department*/
-          'Reject',
+          'Approval', /* this equal checked at then push to Approve & Signature */
+          'Signature', /* normally use when top position in the company like CEO or Head of Department*/
         ]),
       ),
     ],
