@@ -17,46 +17,29 @@ exports.create = async (req, res) => {
   }
 
   try {
-    // 2) Use a transaction so settings only get seeded if the type is created
-    const newId = await db.tx(async t => {
-      const { id } = await t.one(
-        `INSERT INTO document_types
-           (title, description, owner_id)
-         VALUES ($1, $2, $3)
-         RETURNING id`,
-        [ title.trim(), description.trim(), ownerId ]
+      const addDocumentType =
+        `INSERT INTO document_types (title, description, owner_id, created_at) VALUES ($1, $2, $3, NOW()) RETURNING id`;
+
+      const result = await db.one(
+        addDocumentType, [title, description, ownerId]
       );
 
-      await t.none(
-        `INSERT INTO document_type_settings
-           (document_type_id, action, forward_mode)
-         VALUES ($1, 'Read-Only', 'Direct')`,
-        [ id ]
-      );
+      const addDocumentTypeSetting =
+        `INSERT INTO document_type_settings (document_type_id, action, forward_mode, created_at) VALUES ($1, 'Read-Only', 'Direct', NOW())`;
 
-      return id;
-    });
+      await db.none(
+        addDocumentTypeSetting,
+        [ result.id ]
+      );
 
     // 3) Success
     return res
       .status(201)
-      .json({ message: 'Document type created', id: newId });
+      .json({ message: 'Document type created', id: result.id });
 
   } catch (err) {
     console.error('Error creating document type:', err);
     return res.status(500).json({ error: 'Server error' });
-  }
-};
-
-
-/* List all Document Type */
-exports.list = async (req, res) => {
-  try {
-    const rows = await db.any('SELECT id, title, description FROM document_types');
-    res.json(rows);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Error fetching document types' });
   }
 };
 
@@ -98,12 +81,13 @@ exports.update = async (req, res) => {
     return res.status(400).json({ error: 'Missing fields or not authenticated' });
   }
 
+  const getOwnerId =
+    `SELECT owner_id FROM document_types WHERE id = $1`;
+
   try {
     // 2) Fetch owner
     const row = await db.oneOrNone(
-      `SELECT owner_id
-         FROM document_types
-        WHERE id = $1`,
+      getOwnerId,
       [docTypeId]
     );
 
@@ -116,13 +100,11 @@ exports.update = async (req, res) => {
       return res.status(403).json({ error: 'Not allowed to update this document type' });
     }
 
+    const updateDocumentType =
+        `UPDATE document_types SET title = $1, description = $2, updated_at = NOW() WHERE id = $3`;
     // 4) Perform the update
     const result = await db.result(
-      `UPDATE document_types
-          SET title       = $1,
-              description = $2,
-              update_at  = NOW()
-        WHERE id = $3`,
+      updateDocumentType,
       [ title.trim(), description.trim(), docTypeId ]
     );
 
@@ -135,6 +117,55 @@ exports.update = async (req, res) => {
     return res.status(500).json({ error: 'Server error' });
   }
 };
+
+exports.updateFlow = async (req, res) => {
+    const docTypeId = parseInt(req.params.id, 10);
+    const ownerId = req.employee?.id;
+    const {action, forward_mode, flows} = req.body;
+    if(!ownerId) return res.status(401).json({error: 'Not Authenticated'});
+
+    const sql1 = `SELECT owner_id FROM document_types WHERE id = $1`;
+
+    const row = await db.oneOrNone(
+        sql1,
+        [docTypeId]
+    );
+
+    if(!row) return res.status(404).json({error: 'Not found'});
+    if(row.owner_id != ownerId) return res.status(403).json({error: 'Forbidden to Update'});
+
+    const updateSetting =
+        `UPDATE document_type_settings SET action = $1, forward_mode = $2, updated_at = NOW() WHERE document_type_id = $3`;
+    const deleteFlow =
+        `DELETE FROM document_type_flows WHERE document_type_id = $1`;
+    const updateFlow =
+        `INSERT INTO document_type_flows (document_type_id, sequence, department_id, employee_id, step_action) VALUES ($1, $2, $3, $4, $5)`;
+    try{
+        await db.tx(async t => {
+            await t.none(
+                updateSetting,
+                [action, forward_mode, docTypeId]
+            );
+
+            await t.none(
+                deleteFlow,
+                [docTypeId]
+            );
+
+            for( const f of flows ) {
+                await t.none(
+                    updateFlow,
+                    [docTypeId, f.sequence, f.department_id, f.employee_id, f.step_action]
+                );
+            }
+        });
+        res.json({message : 'Flow updated'})
+    }
+    catch (e){
+        console.error(e);
+        res.status(500).json({error : 'Server error'});
+    }
+}
 
 
 /* List document type by em_id */
