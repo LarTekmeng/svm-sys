@@ -6,6 +6,8 @@ class DoctypeRepository{
 
   final String _baseUrl = getLocalhost();
   final AuthRepository _authRepo = AuthRepository.instance;
+  final DepartmentRepository _deptRepo = DepartmentRepository();
+  final EmployeeRepository _empRepo = EmployeeRepository();
 
   /* Create new document type */
   Future<Map<String, dynamic>> newDocType(String title, String description) async {
@@ -91,4 +93,38 @@ class DoctypeRepository{
   }
   /*=====*/
 
+  Future<List<Department>> getDepartment() async {
+    return _deptRepo.fetchDepartments();
+  }
+
+  Future<List<Employee>> getEmployee() async {
+    return _empRepo.getAllEmployee();
+  }
+
+  Future<void> setDocTypeFlow(
+      int documentTypeId,
+      String action,
+      String forwardMode,
+      List<Map<String, dynamic>> flows,
+      ) async {
+    final token = await _authRepo.getPersistedToken();
+    final uri = Uri.parse('$_baseUrl/api/doctypes/$documentTypeId/flow');
+    final payload = {
+      'action': action,
+      'forward_mode': forwardMode,
+      'flows': flows,
+    };
+    final resp = await http.put(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(payload),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception('Failed to set flow '
+          '(status ${resp.statusCode}): ${resp.body}');
+    }
+  }
 }

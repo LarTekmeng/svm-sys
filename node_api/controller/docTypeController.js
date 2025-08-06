@@ -119,53 +119,121 @@ exports.update = async (req, res) => {
 };
 
 exports.updateFlow = async (req, res) => {
-    const docTypeId = parseInt(req.params.id, 10);
-    const ownerId = req.employee?.id;
-    const {action, forward_mode, flows} = req.body;
-    if(!ownerId) return res.status(401).json({error: 'Not Authenticated'});
+  const docTypeId = parseInt(req.params.id, 10);
+  const ownerId   = req.employee?.id;
+  const { action, forward_mode, flows } = req.body;
 
-    const sql1 = `SELECT owner_id FROM document_types WHERE id = $1`;
+  if (!ownerId)
+    return res.status(401).json({ error: 'Not Authenticated' });
 
-    const row = await db.oneOrNone(
-        sql1,
-        [docTypeId]
-    );
+  // 1) Ownership check
+  const row = await db.oneOrNone(
+    `SELECT owner_id FROM document_types WHERE id = $1`,
+    [docTypeId]
+  );
+  if (!row)
+    return res.status(404).json({ error: 'Not found' });
+  if (row.owner_id !== ownerId)
+    return res.status(403).json({ error: 'Forbidden to Update' });
 
-    if(!row) return res.status(404).json({error: 'Not found'});
-    if(row.owner_id != ownerId) return res.status(403).json({error: 'Forbidden to Update'});
+  // 2) SQL templates
+  const updateSettingSql = `
+    UPDATE document_type_settings
+       SET action      = $1,
+           forward_mode = $2,
+           updated_at   = NOW()
+     WHERE document_type_id = $3
+  `;
+  const deleteFlowSql = `
+    DELETE FROM document_type_flows
+     WHERE document_type_id = $1
+  `;
+  const insertFlowSql = `
+    INSERT INTO document_type_flows
+      (document_type_id, sequence, department_id, employee_id, step_action)
+    VALUES ($1, $2, $3, $4, $5)
+  `;
 
-    const updateSetting =
-        `UPDATE document_type_settings SET action = $1, forward_mode = $2, updated_at = NOW() WHERE document_type_id = $3`;
-    const deleteFlow =
-        `DELETE FROM document_type_flows WHERE document_type_id = $1`;
-    const updateFlow =
-        `INSERT INTO document_type_flows (document_type_id, sequence, department_id, employee_id, step_action) VALUES ($1, $2, $3, $4, $5)`;
-    try{
-        await db.tx(async t => {
-            await t.none(
-                updateSetting,
-                [action, forward_mode, docTypeId]
-            );
+  try {
+    await db.tx(async t => {
+      // A) Update the settings row
+      await t.none(updateSettingSql, [action, forward_mode, docTypeId]);
 
-            await t.none(
-                deleteFlow,
-                [docTypeId]
-            );
+      // B) Wipe out existing steps
+      await t.none(deleteFlowSql, [docTypeId]);
 
-            for( const f of flows ) {
-                await t.none(
-                    updateFlow,
-                    [docTypeId, f.sequence, f.department_id, f.employee_id, f.step_action]
-                );
-            }
-        });
-        res.json({message : 'Flow updated'})
-    }
-    catch (e){
-        console.error(e);
-        res.status(500).json({error : 'Server error'});
-    }
-}
+      // C) Expand & insert each flow element
+      for (const f of flows) {
+        const deptAll = (f.department_id === 'all');
+        const empAll  = (f.employee_id   === 'all');
+
+        if (deptAll && empAll) {
+          // → every employee in the company
+          const everyone = await t.many(`
+            SELECT id, department_id FROM employees
+          `);
+          for (const emp of everyone) {
+            await t.none(insertFlowSql, [
+              docTypeId,
+              f.sequence,
+              emp.department_id,
+              emp.id,
+              f.step_action
+            ]);
+          }
+
+        } else if (deptAll) {
+          // → single specific employee, but unknown department → fetch their dept
+          const emp = await t.one(`
+            SELECT id, department_id
+              FROM employees
+             WHERE id = $1
+          `, [f.employee_id]);
+          await t.none(insertFlowSql, [
+            docTypeId,
+            f.sequence,
+            emp.department_id,
+            emp.id,
+            f.step_action
+          ]);
+
+        } else if (empAll) {
+          // → every employee *within* a specific department
+          const deptEmps = await t.many(`
+            SELECT id
+              FROM employees
+             WHERE department_id = $1
+          `, [f.department_id]);
+          for (const emp of deptEmps) {
+            await t.none(insertFlowSql, [
+              docTypeId,
+              f.sequence,
+              f.department_id,
+              emp.id,
+              f.step_action
+            ]);
+          }
+
+        } else {
+          // → one specific employee in one specific department
+          await t.none(insertFlowSql, [
+            docTypeId,
+            f.sequence,
+            f.department_id,
+            f.employee_id,
+            f.step_action
+          ]);
+        }
+      }
+    });
+
+    return res.json({ message: 'Flow updated (wildcards expanded)' });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
 
 
 /* List document type by em_id */

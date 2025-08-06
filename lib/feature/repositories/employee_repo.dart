@@ -17,4 +17,16 @@ class EmployeeRepository{
     final data = (body['employee'] as Map<String, dynamic>?) ?? body;
     return Employee.fromJson(data);
   }
-}
+
+  Future<List<Employee>> getAllEmployee() async {
+    final uri = Uri.parse('$_baseUrl/api/employees/');
+    final resp = await http.get(uri);
+    if (resp.statusCode != 200){
+      throw Exception('Fail to load employee (status ${resp.statusCode})');
+    }
+    final List raw = jsonDecode(resp.body) as List;
+    return raw.map((e) => Employee.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+
+ }

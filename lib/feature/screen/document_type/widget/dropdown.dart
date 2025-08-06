@@ -11,11 +11,13 @@ Widget buildDropdownRow() {
           'Accounting',
           'Finance',
           'Sale',
+          /* Fetch department, ALL = ALL department else is each department */
         ]),
       ),
       const SizedBox(width: 8),
       Expanded(
         child: dropdownField('Employee', ['all','Pheak', 'Heng', 'Rith', 'Krissna']),
+        /* fetch employee, ALL is for all employee */
       ),
       const SizedBox(width: 8),
       Expanded(
