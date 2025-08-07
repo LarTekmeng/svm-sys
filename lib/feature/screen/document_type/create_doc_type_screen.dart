@@ -13,10 +13,10 @@ class CreateDocumentTypeScreen extends StatefulWidget {
 class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
-  final _formKey               = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormState>();
 
-  bool   _isLoading = false;
-  String _error     = '';
+  bool _isLoading = false;
+  String _error = '';
 
   @override
   void dispose() {
@@ -29,8 +29,10 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
   void initState() {
     super.initState();
     // Prefill if editing
-    _titleController       = TextEditingController(text: widget.existing?.docTitle);
-    _descriptionController = TextEditingController(text: widget.existing?.docDesc);
+    _titleController = TextEditingController(text: widget.existing?.docTitle);
+    _descriptionController = TextEditingController(
+      text: widget.existing?.docDesc,
+    );
   }
 
   Future<void> _onSubmit() async {
@@ -38,7 +40,7 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
 
     setState(() {
       _isLoading = true;
-      _error     = '';
+      _error = '';
     });
 
     try {
@@ -61,7 +63,9 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
-      setState(() { _isLoading = false; });
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -82,9 +86,14 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(isEdit? 'Edit: ${widget.existing?.docTitle}' :
-                'Create new\nDocument Type',
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              Text(
+                isEdit
+                    ? 'Edit: ${widget.existing?.docTitle}'
+                    : 'Create new\nDocument Type',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 30),
 
@@ -98,8 +107,8 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
                   filled: true,
                   fillColor: Colors.white,
                 ),
-                validator: (v) =>
-                v == null || v.trim().isEmpty ? 'Required' : null,
+                validator:
+                    (v) => v == null || v.trim().isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 20),
 
@@ -115,20 +124,26 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
                   filled: true,
                   fillColor: Colors.white,
                 ),
-                validator: (v) =>
-                v == null || v.trim().isEmpty ? 'Required' : null,
+                validator:
+                    (v) => v == null || v.trim().isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 15),
 
               // Optional link to set types
               Center(
                 child: TextButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const SetDocumentTypeScreen(),
-                    ),
-                  ),
+                  onPressed: () {
+                    final id = widget.existing?.id;
+                    if (id != null) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (_) => SetDocumentTypeScreen(documentTypeId: id),
+                        ),
+                      );
+                    }
+                  },
                   child: const Text(
                     'Set the document type now?',
                     style: TextStyle(color: Colors.blue),
@@ -141,7 +156,10 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
               if (_error.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(_error, style: const TextStyle(color: Colors.red)),
+                  child: Text(
+                    _error,
+                    style: const TextStyle(color: Colors.red),
+                  ),
                 ),
 
               Row(
@@ -151,17 +169,19 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
                   _isLoading
                       ? const CircularProgressIndicator()
                       : ElevatedButton(
-                    onPressed: _onSubmit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 30, vertical: 12),
-                    ),
-                    child:  Text(isEdit? 'Save' :
-                      'Confirm',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
+                        onPressed: _onSubmit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 30,
+                            vertical: 12,
+                          ),
+                        ),
+                        child: Text(
+                          isEdit ? 'Save' : 'Confirm',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
 
                   // Cancel button
                   ElevatedButton(
@@ -169,7 +189,9 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 30, vertical: 12),
+                        horizontal: 30,
+                        vertical: 12,
+                      ),
                     ),
                     child: const Text(
                       'Cancel',
@@ -187,4 +209,3 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
     );
   }
 }
-

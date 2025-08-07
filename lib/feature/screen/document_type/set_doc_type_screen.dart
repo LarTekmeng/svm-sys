@@ -1,206 +1,235 @@
 import 'package:online_doc_savimex/app_import.dart';
+import 'package:online_doc_savimex/feature/repositories/doctype_repo.dart';
 
 class SetDocumentTypeScreen extends StatefulWidget {
-  const SetDocumentTypeScreen({super.key});
+  final int documentTypeId;
+  const SetDocumentTypeScreen({super.key, required this.documentTypeId});
 
   @override
   State<SetDocumentTypeScreen> createState() => _SetDocumentTypeScreenState();
 }
 
 class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
+  final _repo = DoctypeRepository();
+
   String selectedAction = 'Read-Only';
   String selectedForwardMode = '';
 
   bool isDirectExpanded = false;
   bool isStepExpanded = false;
 
-  List<int> directList = [0]; // default: 1 dropdown
-  List<int> stepList = [0, 1]; // default: 2 dropdowns
+  List<String> deptItems = ['all'];
+  List<String> allEmpItems = ['all'];
+  Map<String, List<String>> empMap = {};
+  Map<String, String> deptNameMap = {};
+  Map<String, String> empNameMap = {};
+  final actionItems = ['APPROVAL', 'SIGNATURE'];
 
-  void addDirect() => setState(() => directList.add(directList.length));
-  void undoDirect() {
-    if (directList.length > 1) {
-      setState(() => directList.removeLast());
+  List<String?> selectedDepts = [];
+  List<String?> selectedEmps = [];
+  List<String?> selectedActions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMetadata();
+  }
+
+  Future<void> _loadMetadata() async {
+    final depts = await _repo.getDepartment();
+    final emps = await _repo.getEmployee();
+
+    // 1) dept IDs & name map
+    final deptIds = ['all', ...depts.map((d) => d.id.toString())];
+    final dMap = {for (var d in depts) d.id.toString(): d.name};
+
+    // 2) employee flat list & name map
+    final allEmps = ['all', ...emps.map((e) => e.id.toString())];
+    final eMap = {for (var e in emps) e.id.toString(): e.employeeName};
+
+    // 3) build empMap keyed by deptID
+    final grouped = <String, List<String>>{};
+    for (var d in depts) {
+      final key = d.id.toString();
+      grouped[key] = [
+        'all',
+        ...emps
+            .where((e) => e.departmentID.toString() == key)
+            .map((e) => e.id.toString()),
+      ];
+    }
+
+    setState(() {
+      deptItems = deptIds;
+      deptNameMap = dMap;
+      allEmpItems = allEmps;
+      empNameMap = eMap;
+      empMap = grouped;
+      selectedDepts = List.filled(1, null);
+      selectedEmps = List.filled(1, null);
+      selectedActions = List.filled(1, null);
+    });
+  }
+
+  void _addRow() {
+    setState(() {
+      selectedDepts.add(null);
+      selectedEmps.add(null);
+      selectedActions.add(null);
+    });
+  }
+
+  void _removeRow() {
+    if (selectedDepts.length > 1) {
+      setState(() {
+        selectedDepts.removeLast();
+        selectedEmps.removeLast();
+        selectedActions.removeLast();
+      });
     }
   }
 
-  void addStep() => setState(() => stepList.add(stepList.length));
-  void undoStep() {
-    if (stepList.length > 2) {
-      setState(() => stepList.removeLast());
+  Future<void> _onConfirm() async {
+    final flows = <Map<String, dynamic>>[];
+    for (var i = 0; i < selectedDepts.length; i++) {
+      flows.add({
+        'sequence': i + 1,
+        'department_id': selectedDepts[i] ?? 'all',
+        'employee_id': selectedEmps[i] ?? 'all',
+        'step_action': selectedActions[i] ?? 'APPROVAL',
+      });
     }
+    await _repo.setDocTypeFlow(
+      widget.documentTypeId,
+      selectedAction,
+      selectedForwardMode,
+      flows,
+    );
+    Navigator.pop(context, true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool stepDisabled = selectedAction == 'Read-Only';
+    final stepDisabled = selectedAction == 'Read-Only';
 
     return Scaffold(
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Set Document Type:',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Accounting',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const SizedBox(height: 20),
-              const Text('Document type action:'),
-              RadioListTile<String>(
-                title: const Text('Read Only'),
-                value: 'Read-Only',
-                groupValue: selectedAction,
-                onChanged: (val) => setState(() {
-                  selectedAction = val!;
-                  // Reset forward mode if switching to Read-Only
-                  if (selectedAction == 'Read-Only') {
-                    isStepExpanded = false;
-                    stepList = [0, 1];
-                  }
-                }),
-              ),
-              RadioListTile<String>(
-                title: const Text('Ask for Permission'),
-                value: 'Ask for Permission',
-                groupValue: selectedAction,
-                onChanged: (val) => setState(() {
-                  selectedAction = val!;
-                }),
-              ),
-              const SizedBox(height: 10),
-              const Text('Forward to:'),
-
-              // Direct Section
-              IgnorePointer(
-                ignoring: isStepExpanded,
-                child: Opacity(
-                  opacity: isStepExpanded ? 0.4 : 1.0,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            isDirectExpanded = !isDirectExpanded;
-                            isStepExpanded = false;
-                            selectedForwardMode =
-                            isDirectExpanded ? 'Direct' : '';
-                            directList = [0];
-                          });
-                        },
-                        child: Text(
-                          '${isDirectExpanded ? '➖' : '➕'} Direct',
-                          style: TextStyle(
-                            color: isStepExpanded ? Colors.grey : Colors.blue,
-                            fontWeight: isDirectExpanded
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
+      appBar: AppBar(title: const Text('Set Document Type Flow')),
+      body:
+          deptItems.length == 1
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Action:'),
+                    RadioListTile<String>(
+                      title: const Text('Read-Only'),
+                      value: 'Read-Only',
+                      groupValue: selectedAction,
+                      onChanged:
+                          (v) => setState(() {
+                            selectedAction = v!;
+                            if (v == 'Read-Only') {
+                              isStepExpanded = false;
+                              isDirectExpanded = false;
+                              selectedForwardMode = '';
+                            }
+                          }),
+                    ),
+                    RadioListTile<String>(
+                      title: const Text('Ask for Permission'),
+                      value: 'Ask for Permission',
+                      groupValue: selectedAction,
+                      onChanged: (v) => setState(() => selectedAction = v!),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Forward Mode:'),
+                    Wrap(
+                      spacing: 16,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Direct'),
+                          selected: isDirectExpanded,
+                          onSelected:
+                              (on) => setState(() {
+                                isDirectExpanded = on;
+                                isStepExpanded = false;
+                                selectedForwardMode = on ? 'Direct' : '';
+                                selectedDepts = List.filled(1, null);
+                                selectedEmps = List.filled(1, null);
+                                selectedActions = List.filled(1, null);
+                              }),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      if (isDirectExpanded) ...[
-                        for (var i in directList) ...[
-                          buildDropdownRow(),
-                          const SizedBox(height: 10),
-                        ],
-                        if (directList.length > 1)
-                          TextButton(
-                            onPressed: undoDirect,
-                            child: const Text('↩️ Undo'),
-                          ),
-                        TextButton(
-                          onPressed: addDirect,
-                          child: const Text('➕ add more'),
+                        ChoiceChip(
+                          label: const Text('Step by Step'),
+                          selected: isStepExpanded,
+                          onSelected:
+                              stepDisabled
+                                  ? null
+                                  : (on) => setState(() {
+                                    isStepExpanded = on;
+                                    isDirectExpanded = false;
+                                    selectedForwardMode =
+                                        on ? 'Step by Step' : '';
+                                    selectedDepts = List.filled(2, null);
+                                    selectedEmps = List.filled(2, null);
+                                    selectedActions = List.filled(2, null);
+                                  }),
                         ),
                       ],
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // Step-by-Step Section
-              IgnorePointer(
-                ignoring: isDirectExpanded || stepDisabled,
-                child: Opacity(
-                  opacity: (isDirectExpanded || stepDisabled) ? 0.4 : 1.0,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          if (stepDisabled) return;
-                          setState(() {
-                            isStepExpanded = !isStepExpanded;
-                            isDirectExpanded = false;
-                            selectedForwardMode =
-                            isStepExpanded ? 'Step by Step' : '';
-                            stepList = [0, 1];
-                          });
-                        },
-                        child: Text(
-                          '${isStepExpanded ? '➖' : '➕'} Step by Step',
-                          style: TextStyle(
-                            color: (isDirectExpanded || stepDisabled)
-                                ? Colors.grey
-                                : Colors.blue,
-                            fontWeight: isStepExpanded
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (isDirectExpanded || isStepExpanded) ...[
+                      for (var i = 0; i < selectedDepts.length; i++) ...[
+                        buildFlowRow(
+                          selectedDept: selectedDepts[i],
+                          selectedEmp: selectedEmps[i],
+                          selectedAction: selectedActions[i],
+                          deptItems: deptItems,
+                          empItems:
+                              (selectedDepts[i] != null &&
+                                      selectedDepts[i] != 'all')
+                                  ? empMap[selectedDepts[i]]!
+                                  : allEmpItems,
+                          actionItems: actionItems,
+                          onDeptChanged:
+                              (v) => setState(() {
+                                selectedDepts[i] = v;
+                                // reset employee when dept changes
+                                selectedEmps[i] = null;
+                              }),
+                          onEmpChanged:
+                              (v) => setState(() => selectedEmps[i] = v),
+                          onActionChanged:
+                              (v) => setState(() => selectedActions[i] = v),
+                          deptNameMap: deptNameMap,
+                          empNameMap: empNameMap,
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      if (isStepExpanded) ...[
-                        for (var i in stepList) ...[
-                          buildDropdownRow(),
-                          const SizedBox(height: 10),
-                        ],
-                        if (stepList.length > 2)
-                          TextButton(
-                            onPressed: undoStep,
-                            child: const Text('↩️ Undo'),
-                          ),
-                        TextButton(
-                          onPressed: addStep,
-                          child: const Text('➕ add more'),
-                        ),
+                        const SizedBox(height: 8),
                       ],
+                      Row(
+                        children: [
+                          if (selectedDepts.length > 1)
+                            TextButton(
+                              onPressed: _removeRow,
+                              child: const Text('Undo'),
+                            ),
+                          TextButton(
+                            onPressed: _addRow,
+                            child: const Text('Add more'),
+                          ),
+                        ],
+                      ),
                     ],
-                  ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
       bottomNavigationBar: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 50),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-              child: const Text('Confirm',
-                  style: TextStyle(color: Colors.white)),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child:
-              const Text('Cancel', style: TextStyle(color: Colors.white)),
-            ),
-          ],
+        padding: const EdgeInsets.all(16),
+        child: ElevatedButton(
+          onPressed: _onConfirm,
+          child: const Text('Confirm'),
         ),
       ),
     );

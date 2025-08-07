@@ -1,58 +1,103 @@
+// lib/feature/screen/Doc_type/dropdown.dart
 import 'package:flutter/material.dart';
 
-Widget buildDropdownRow() {
-  return Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+/// A parameterized dropdown block for selecting department, then employee & action.
+/// - deptItems & empItems are lists of **IDs** (e.g. ['all','3','5',…])
+/// - deptNameMap & empNameMap map those IDs to display names
+Widget buildFlowRow({
+  required String? selectedDept,
+  required String? selectedEmp,
+  required String? selectedAction,
+
+  // ID lists
+  required List<String> deptItems,
+  required List<String> empItems,
+  required List<String> actionItems,
+
+  // ID → display name
+  required Map<String, String> deptNameMap,
+  required Map<String, String> empNameMap,
+
+  // callbacks
+  required ValueChanged<String?> onDeptChanged,
+  required ValueChanged<String?> onEmpChanged,
+  required ValueChanged<String?> onActionChanged,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Expanded(
-        child: dropdownField('Department', [
-          'all',
-          'HR',
-          'Accounting',
-          'Finance',
-          'Sale',
-          /* Fetch department, ALL = ALL department else is each department */
-        ]),
+      // ─── Department (full width) ──────────────────────────────────────────
+      DropdownButtonFormField<String>(
+        decoration: const InputDecoration(
+          labelText: 'Department',
+          border: OutlineInputBorder(),
+          isDense: true,
+        ),
+        value: selectedDept,
+        hint: const Text('Department'),
+        items: deptItems.map((deptId) {
+          final label = deptId == 'all'
+              ? 'All Departments'
+              : (deptNameMap[deptId] ?? deptId);
+          return DropdownMenuItem(
+            value: deptId,
+            child: Text(label),
+          );
+        }).toList(),
+        onChanged: onDeptChanged,
       ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: dropdownField('Employee', ['all','Pheak', 'Heng', 'Rith', 'Krissna']),
-        /* fetch employee, ALL is for all employee */
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: dropdownField('Action', [
-          'Approval', /* this equal checked at then push to Approve & Signature */
-          'Signature', /* normally use when top position in the company like CEO or Head of Department*/
-        ]),
+
+      const SizedBox(height: 8),
+
+      // ─── Employee & Action (side by side) ─────────────────────────────────
+      Row(
+        children: [
+          // Employee
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              decoration: const InputDecoration(
+                labelText: 'Employee',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              value: selectedEmp,
+              hint: const Text('Employee'),
+              items: empItems.map((empId) {
+                final label = empId == 'all'
+                    ? 'All Employees'
+                    : (empNameMap[empId] ?? empId);
+                return DropdownMenuItem(
+                  value: empId,
+                  child: Text(label),
+                );
+              }).toList(),
+              onChanged: onEmpChanged,
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          // Action
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              decoration: const InputDecoration(
+                labelText: 'Action',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              value: selectedAction,
+              hint: const Text('Select Action'),
+              items: actionItems.map((action) {
+                return DropdownMenuItem(
+                  value: action,
+                  child: Text(action),
+                );
+              }).toList(),
+              onChanged: onActionChanged,
+            ),
+          ),
+        ],
       ),
     ],
   );
 }
-
-Widget dropdownField(String label, List<String> items) {
-  return DropdownButtonFormField<String>(
-    decoration: InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(fontSize: 13),
-      border: const OutlineInputBorder(),
-      isDense: true,
-    ),
-    isExpanded: true, // ✅ Important: makes dropdown take full width
-    items: items.map((e) {
-      return DropdownMenuItem(
-        value: e,
-        child: Text(
-          e,
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-          softWrap: false,
-          style: const TextStyle(fontSize: 13),
-        ),
-      );
-    }).toList(),
-    onChanged: (value) {},
-  );
-}
-
-

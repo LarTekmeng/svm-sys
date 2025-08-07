@@ -1,4 +1,3 @@
-
 import 'package:flutter/cupertino.dart';
 import 'package:online_doc_savimex/app_import.dart';
 import 'package:online_doc_savimex/feature/repositories/doctype_repo.dart';
@@ -54,18 +53,40 @@ class DocTypeCard extends StatelessWidget {
                   /*Set flow of document so when employee post a document it will follow*/
                   _iconClick(
                     icon: CupertinoIcons.hand_draw_fill,
-                    onTap: ()=>Navigator.push(context, MaterialPageRoute(builder: (context)=> SetDocumentTypeScreen())),
+                    onTap: () async {
+                      final saved = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (_) => SetDocumentTypeScreen(documentTypeId: id),
+                        ),
+                      );
+                      if (saved == true){
+                        onDeleted();
+                      }
+                    },
                   ),
                   const Text('/', style: TextStyle(color: Colors.white)),
                   /*This is edit document type. nothing special just edit name and description*/
                   _iconClick(
-                      icon: Icons.edit,
-                      onTap: () async{final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (context)=> CreateDocumentTypeScreen(
-                        existing: DocumentType(id: id, docTitle: title, docDesc: description),
-
-                      )));
-                        if(changed == true) onDeleted();
-                      }),
+                    icon: Icons.edit,
+                    onTap: () async {
+                      final changed = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (context) => CreateDocumentTypeScreen(
+                                existing: DocumentType(
+                                  id: id,
+                                  docTitle: title,
+                                  docDesc: description,
+                                ),
+                              ),
+                        ),
+                      );
+                      if (changed == true) onDeleted();
+                    },
+                  ),
                   const Text('/', style: TextStyle(color: Colors.white)),
                   /*This is delete. to delete document type and also the set of document type*/
                   _iconClick(
@@ -95,7 +116,6 @@ class DocTypeCard extends StatelessWidget {
       constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
     );
   }
-
 
   Future<void> _confirmAndDelete(BuildContext context) async {
     final ok = await showDialog<bool>(
