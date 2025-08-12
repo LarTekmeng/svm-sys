@@ -46,3 +46,17 @@ exports.getByEmployeeId = async (req, res) => {
   }
 };
 
+exports.getByDepartment = async (req, res) => {
+    const {departmentId} = req.params;
+    try{
+        const row = await db.any(
+            'SELECT id, employee_name, dp_id FROM employee WHERE dp_id = $1',
+            [departmentId]
+        );
+        res.json(row);
+    }
+    catch (e){
+        console.error(e);
+        res.status(500).json({ error: 'Error fetching employee by department'});
+    }
+};

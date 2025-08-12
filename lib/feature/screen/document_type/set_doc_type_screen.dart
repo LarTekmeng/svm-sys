@@ -65,9 +65,9 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
       allEmpItems = allEmps;
       empNameMap = eMap;
       empMap = grouped;
-      selectedDepts = List.filled(1, null);
-      selectedEmps = List.filled(1, null);
-      selectedActions = List.filled(1, null);
+      selectedDepts = List.filled(1, null, growable: true);
+      selectedEmps = List.filled(1, null, growable: true);
+      selectedActions = List.filled(1, null, growable: true);
     });
   }
 
@@ -156,9 +156,9 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
                                 isDirectExpanded = on;
                                 isStepExpanded = false;
                                 selectedForwardMode = on ? 'Direct' : '';
-                                selectedDepts = List.filled(1, null);
-                                selectedEmps = List.filled(1, null);
-                                selectedActions = List.filled(1, null);
+                                selectedDepts = List.filled(1, null, growable: true);
+                                selectedEmps = List.filled(1, null, growable: true);
+                                selectedActions = List.filled(1, null, growable: true);
                               }),
                         ),
                         ChoiceChip(
@@ -172,9 +172,9 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
                                     isDirectExpanded = false;
                                     selectedForwardMode =
                                         on ? 'Step by Step' : '';
-                                    selectedDepts = List.filled(2, null);
-                                    selectedEmps = List.filled(2, null);
-                                    selectedActions = List.filled(2, null);
+                                    selectedDepts = List.filled(2, null, growable: true);
+                                    selectedEmps = List.filled(2, null, growable: true);
+                                    selectedActions = List.filled(2, null, growable: true);
                                   }),
                         ),
                       ],
@@ -206,6 +206,8 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
                           deptNameMap: deptNameMap,
                           empNameMap: empNameMap,
                         ),
+                        if(selectedDepts.length > 1)
+                          Divider(),
                         const SizedBox(height: 8),
                       ],
                       Row(

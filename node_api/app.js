@@ -13,6 +13,7 @@ app.use('/api/employees', require('./route/employee'));
 app.use('/api/doctypes', require('./route/docType'));
 app.use('/api/documents', require('./route/document'));
 app.use('/api/departments', require('./route/department'));
+app.use('/api/home', require('./route/home'));
 
 // global error fallback (if you `next(err)`)
 app.use((err, req, res, next) => {

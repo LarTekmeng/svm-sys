@@ -22,9 +22,6 @@ class DepartmentRepository {
 
     // Parse as a List since your controller does `res.json(rows)` directly
     final List rawList = jsonDecode(response.body) as List;
-
-    return rawList
-        .map((json) => Department.fromJson(json as Map<String, dynamic>))
-        .toList();
+    return rawList.map((json) => Department.fromJson(json as Map<String,dynamic>)).toList();
   }
 }

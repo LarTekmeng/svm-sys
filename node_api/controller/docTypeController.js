@@ -119,7 +119,7 @@ exports.update = async (req, res) => {
 };
 
 exports.updateFlow = async (req, res) => {
-  const docTypeId = parseInt(req.params.id, 10);
+  const docTypeId = parseInt(req.params.documentTypeId, 10);
   const ownerId   = req.employee?.id;
   const { action, forward_mode, flows } = req.body;
 
@@ -170,13 +170,13 @@ exports.updateFlow = async (req, res) => {
         if (deptAll && empAll) {
           // → every employee in the company
           const everyone = await t.many(`
-            SELECT id, department_id FROM employees
+            SELECT id, dp_id FROM employee
           `);
           for (const emp of everyone) {
             await t.none(insertFlowSql, [
               docTypeId,
               f.sequence,
-              emp.department_id,
+              emp.dp_id,
               emp.id,
               f.step_action
             ]);
@@ -185,14 +185,14 @@ exports.updateFlow = async (req, res) => {
         } else if (deptAll) {
           // → single specific employee, but unknown department → fetch their dept
           const emp = await t.one(`
-            SELECT id, department_id
-              FROM employees
+            SELECT id, dp_id
+              FROM employee
              WHERE id = $1
           `, [f.employee_id]);
           await t.none(insertFlowSql, [
             docTypeId,
             f.sequence,
-            emp.department_id,
+            emp.dp_id,
             emp.id,
             f.step_action
           ]);
@@ -201,8 +201,8 @@ exports.updateFlow = async (req, res) => {
           // → every employee *within* a specific department
           const deptEmps = await t.many(`
             SELECT id
-              FROM employees
-             WHERE department_id = $1
+              FROM employee
+             WHERE dp_id = $1
           `, [f.department_id]);
           for (const emp of deptEmps) {
             await t.none(insertFlowSql, [

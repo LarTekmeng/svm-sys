@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 
 class UploadBlock extends StatefulWidget {
   final VoidCallback? onRemove;
-  const UploadBlock({Key? key, this.onRemove}) : super(key: key);
+  final VoidCallback? onTapPickFiles;
+
+  const UploadBlock({Key? key, this.onRemove, this.onTapPickFiles})
+      : super(key: key);
 
   @override
   State<UploadBlock> createState() => _UploadBlockState();
@@ -11,7 +14,8 @@ class UploadBlock extends StatefulWidget {
 
 class _UploadBlockState extends State<UploadBlock> {
   bool showFileDescription = false;
-  final TextEditingController fileDescriptionController = TextEditingController();
+  final TextEditingController fileDescriptionController =
+  TextEditingController();
 
   @override
   void dispose() {
@@ -23,63 +27,68 @@ class _UploadBlockState extends State<UploadBlock> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        DottedBorder(
-          borderType: BorderType.RRect,
-          radius: const Radius.circular(8),
-          dashPattern: [6, 3],
-          color: Colors.black45,
-          strokeWidth: 1,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            color: Colors.grey[100],
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.cloud_upload_outlined, size: 40),
-                const SizedBox(height: 8),
-                const Text(
-                  'Click to browse file',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const Text(
-                  'Drag and drop file here',
-                  style: TextStyle(color: Colors.black54),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      showFileDescription = !showFileDescription;
-                    });
-                  },
-                  child: Row(
-                    children: [
-                      Icon(
-                        showFileDescription
-                            ? Icons.undo
-                            : Icons.add_circle_outline,
-                        color: Colors.blue,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        showFileDescription ? 'Undo' : 'Add Description',
-                        style: const TextStyle(color: Colors.blue),
-                      ),
-                    ],
+        InkWell(
+          onTap: widget.onTapPickFiles, // <-- trigger picker
+          child: DottedBorder(
+            borderType: BorderType.RRect,
+            radius: const Radius.circular(8),
+            dashPattern: const [6, 3],
+            color: Colors.black45,
+            strokeWidth: 1,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              color: Colors.grey[100],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.cloud_upload_outlined, size: 40),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Click to browse file',
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                ),
-                if (showFileDescription)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: TextFormField(
-                      controller: fileDescriptionController,
-                      decoration: const InputDecoration(
-                        hintText: 'Enter file description...',
-                        border: OutlineInputBorder(),
-                      ),
+                  const Text(
+                    'Drag and drop file here',
+                    style: TextStyle(color: Colors.black54),
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        showFileDescription = !showFileDescription;
+                      });
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          showFileDescription
+                              ? Icons.undo
+                              : Icons.add_circle_outline,
+                          color: Colors.blue,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          showFileDescription ? 'Undo' : 'Add Description',
+                          style: const TextStyle(color: Colors.blue),
+                        ),
+                      ],
                     ),
                   ),
-              ],
+                  if (showFileDescription)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: TextFormField(
+                        controller: fileDescriptionController,
+                        decoration: const InputDecoration(
+                          hintText: 'Enter file description...',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),

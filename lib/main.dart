@@ -1,6 +1,4 @@
 import 'package:online_doc_savimex/feature/presentation/splash_screen.dart';
-import 'package:online_doc_savimex/feature/repositories/doctype_repo.dart';
-
 import 'app_import.dart';
 
 void main() async {
@@ -13,6 +11,7 @@ void main() async {
   final departmentRepo = DepartmentRepository();
   final employeeRepo   = EmployeeRepository();
   final doctypeRepo = DoctypeRepository();
+  final homeRepo = HomeRepo();
 
 
   runApp(
@@ -21,7 +20,8 @@ void main() async {
         RepositoryProvider<AuthRepository>.value(value: authRepo,),
         RepositoryProvider<DepartmentRepository>.value(value: departmentRepo,),
         RepositoryProvider<EmployeeRepository>.value(value: employeeRepo,),
-        RepositoryProvider<DoctypeRepository>.value(value: doctypeRepo,)
+        RepositoryProvider<DoctypeRepository>.value(value: doctypeRepo,),
+        RepositoryProvider<HomeRepo>.value(value: homeRepo,),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -65,11 +65,15 @@ class _MyAppState extends State<MyApp> {
       routes: {
         '/': (context) => SplashScreen(),
         '/login': (context) => LoginScreen(),
+        //'/home': (context) => HomeScreen(repo: context.read<HomeRepo>()),
         '/home': (context) {
           final employee =
-              ModalRoute.of(context)!.settings.arguments as Employee;
+          ModalRoute
+              .of(context)!
+              .settings
+              .arguments as Employee;
           return Homescreen(employeeID: employee.employeeID);
-        },
+        }
       },
     );
   }

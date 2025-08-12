@@ -15,7 +15,7 @@ const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 
 async function uploadToR2(key, body, contentType) {
   await s3.send(new PutObjectCommand({
-    Bucket:      process.env.R2_BUCKET,
+    Bucket:      process.env.R2_BUCKET_EMPLOYEE_PROFILE,
     Key:         key,
     Body:        body,
     ContentType: contentType,
