@@ -17,7 +17,7 @@ exports.overview = async (req, res) => {
 
         const assignedToMe = await db.any(
             `
-                SELECT DISTINCT d.id, d.description, d.status, d.created_at, d.updated_at, ds.sequence, ds.status AS step_status, ds.step_action, dt.title AS document_type_title
+                SELECT DISTINCT d.id, d.title, d.description, d.status, d.created_at, d.updated_at, ds.sequence, ds.status AS step_status, ds.step_action, dt.title AS document_type_title
                 FROM documents d
                 JOIN document_steps ds ON ds.document_id = d.id
                 LEFT JOIN document_types dt ON dt.id = d.document_type_id

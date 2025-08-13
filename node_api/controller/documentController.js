@@ -1,5 +1,20 @@
 const db = require('../db');
 const storage = require('../service/documentFileStorage');
+const multer = require('multer');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    files: 12,
+    fileSize: 50 * 1024 * 1024, // 50MB each
+  },
+});
+
+const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt']);
+const extOf = (n) => {
+  const i = (n || '').lastIndexOf('.');
+  return i >= 0 ? n.slice(i).toLowerCase() : '';
+};
 
 // --- LIST (kept; added ORDER BY for consistency)
 exports.list = async (req, res) => {
@@ -67,79 +82,114 @@ exports.create = async (req, res) => {
 // POST /api/documents/with-files (multipart/form-data)
 // fields: document_type_id, title, description
 // files:  "files"[] (one or many)
-exports.createWithFiles = async (req, res) => {
-  const employeeId = req.employee?.id;
-  if (!employeeId) return res.status(401).json({ error: 'Not Authenticated' });
+// controllers/documentController.js
+exports.createWithFiles = [
+  // Expect <input name="files" multiple>
+  upload.array('files', 12),
 
-  const { document_type_id, title, description } = req.body;
+  async (req, res) => {
+    const employeeId = req.employee?.id;
+    if (!employeeId) return res.status(401).json({ error: 'Not Authenticated' });
 
-  if (
-    !document_type_id ||
-    typeof title       !== 'string' || !title.trim() ||
-    typeof description !== 'string' || !description.trim()
-  ) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
-  const files = Array.isArray(req.files) ? req.files : (req.file ? [req.file] : []);
-
-  // allowlist (case-insensitive by extension)
-  const allowedExt = new Set(['.jpg', '.jpeg', '.png', '.pdf', '.docx', '.xlsx']);
-  function extOf(name) {
-    const i = name.lastIndexOf('.');
-    return i >= 0 ? name.slice(i).toLowerCase() : '';
-  }
-
-  try {
-    // 1) Insert document first
-    const { id: documentId } = await db.one(
-      `INSERT INTO documents (document_type_id, uploader_id, title, description)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id`,
-      [document_type_id, employeeId, title.trim(), description.trim()]
-    );
-
-    const savedFiles = [];
-
-    // 2) Upload each file (if any) and insert rows
-    for (const f of files) {
-      const ext = extOf(f.originalname);
-      if (!allowedExt.has(ext)) {
-        return res.status(415).json({ error: `File type not allowed: ${ext || '(no extension)'}` });
-      }
-
-      const { key, publicUrl } = await storage.uploadBuffer({
-        documentId,
-        buffer: f.buffer,
-        contentType: f.mimetype,
-        originalname: f.originalname,
-      });
-
-      const row = await db.one(`
-        INSERT INTO document_files (document_id, file_name, file_type, file_size, file_url)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, document_id, file_name, file_type, file_size, file_url, uploaded_at
-      `, [documentId, f.originalname, f.mimetype, f.size, publicUrl]);
-
-      savedFiles.push(row);
+    const { document_type_id, title, description } = req.body;
+    if (!document_type_id || !String(title).trim() || !String(description).trim()) {
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // 3) Return the created document + files
-    return res.status(201).json({
-      message: 'Document created with files',
-      document: {
-        id: documentId,
-        document_type_id,
-        title: title.trim(),
-        description: description.trim()
-      },
-      files: savedFiles
-    });
-  } catch (e) {
-    console.error('Error creating document with files:', e);
-    return res.status(500).json({ error: 'Error creating document with files' });
-  }
-};
+    const files = Array.isArray(req.files) ? req.files : [];
+    // Track uploaded keys for cleanup if TX fails
+    const uploadedKeys = [];
+
+    try {
+      const result = await db.tx(async (t) => {
+        // 1) Insert document
+        const { id: documentId } = await t.one(
+          `INSERT INTO documents (document_type_id, uploader_id, title, description)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id`,
+          [document_type_id, employeeId, String(title).trim(), String(description).trim()]
+        );
+
+        // 2) Create steps (direct vs. step-by-step)
+        const setting = await t.oneOrNone(
+          `SELECT forward_mode FROM document_type_settings WHERE document_type_id = $1`,
+          [document_type_id]
+        );
+        const flows = await t.any(
+          `SELECT sequence, department_id, employee_id, step_action
+             FROM document_type_flows
+            WHERE document_type_id = $1
+            ORDER BY sequence ASC`,
+          [document_type_id]
+        );
+
+        const stepsToInsert =
+          (setting?.forward_mode === 'Step by Step')
+            ? (flows.length ? [flows[0]] : [])
+            : flows;
+
+        for (const f of stepsToInsert) {
+          await t.none(
+            `INSERT INTO document_steps
+               (document_id, sequence, department_id, employee_id, step_action, status)
+             VALUES ($1, $2, $3, $4, $5, 'PENDING')`,
+            [documentId, f.sequence, f.department_id, f.employee_id, f.step_action]
+          );
+        }
+
+        // 3) Upload files + insert file rows
+        const savedFiles = [];
+        for (const f of files) {
+          const ext = extOf(f.originalname);
+          if (!ALLOWED_EXT.has(ext)) {
+            throw new Error(`File type not allowed: ${ext || '(no extension)'}`);
+          }
+
+          const { key, publicUrl } = await storage.uploadBuffer({
+            documentId,
+            buffer: f.buffer,
+            contentType: f.mimetype,
+            originalname: f.originalname,
+          });
+          uploadedKeys.push(key);
+
+          const row = await t.one(
+            `INSERT INTO document_files (document_id, file_name, file_type, file_size, file_url)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, document_id, file_name, file_type, file_size, file_url, uploaded_at`,
+            [documentId, f.originalname, f.mimetype, f.size, publicUrl]
+          );
+          savedFiles.push(row);
+        }
+
+        return {
+          document: {
+            id: documentId,
+            document_type_id,
+            title: String(title).trim(),
+            description: String(description).trim(),
+          },
+          files: savedFiles,
+        };
+      });
+
+      return res.status(201).json({ message: 'Document created with files', ...result });
+    } catch (e) {
+      // Best-effort cleanup of any objects uploaded before TX failed
+      if (uploadedKeys.length) {
+        const { deleteKey } = storage;
+        await Promise.all(uploadedKeys.map(k => deleteKey(k)));
+      }
+
+      console.error('Error creating document with files:', e);
+      const hint = (e.Code === 'AccessDenied')
+        ? 'R2 access denied — check S3 access key scope, bucket name, endpoint, and forcePathStyle'
+        : e.message;
+      return res.status(500).json({ error: 'Error creating document with files', details: hint });
+    }
+  },
+];
+
 
 // --- LIST FILES ---
 exports.listFiles = async (req, res) => {
