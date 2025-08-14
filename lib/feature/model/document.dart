@@ -1,3 +1,30 @@
+// Put these in a shared file or at top of document.dart
+int asInt(dynamic v, {int? or}) {
+  if (v == null) return or ?? 0;
+  if (v is int) return v;
+  if (v is double) return v.toInt();
+  if (v is String) {
+    final i = int.tryParse(v);
+    if (i != null) return i;
+    final d = double.tryParse(v);
+    if (d != null) return d.toInt();
+  }
+  throw FormatException("Expected int, got: $v (${v.runtimeType})");
+}
+
+double asDouble(dynamic v, {double? or}) {
+  if (v == null) return or ?? 0.0;
+  if (v is double) return v;
+  if (v is int) return v.toDouble();
+  if (v is String) {
+    final d = double.tryParse(v);
+    if (d != null) return d;
+  }
+  throw FormatException("Expected double, got: $v (${v.runtimeType})");
+}
+
+
+
 class Document {
   final int? id;
   final String title;
@@ -34,15 +61,15 @@ class Document {
     final updated = _parseDate(json['updated_at']);
 
     return Document(
-      id: _asInt(json['id']),
+      id: (json['id'] == null) ? null : asInt(json['id']),
       title: (json['title'] ?? '') as String,
-      doctypeId: _asInt(json['document_type_id'] ?? json['doctype_id']),
+      doctypeId: (json['document_type_id'] == null) ? null : asInt(json['document_type_id']),
       description: json['description'] as String?,
       status: (json['status'] as String?)?.toUpperCase() ?? 'PENDING',
       createdAt: created ?? DateTime.fromMillisecondsSinceEpoch(0),
       updatedAt: updated ?? DateTime.fromMillisecondsSinceEpoch(0),
       documentTypeTitle: (json['document_type_title'] ?? json['document_type']) as String?,
-      sequence: _asInt(json['sequence']),
+      sequence: (json['sequence'] == null) ? null : asInt(json['sequence']),
       stepAction: json['step_action'] as String?,
       stepStatus: json['step_status'] as String?,
     );
@@ -144,7 +171,7 @@ class DocumentFile {
       documentId: json['document_id'] as int,
       fileName: json['file_name'] as String,
       fileType: json['file_type'] as String,
-      fileSize: (json['file_size'] as num).toInt(),
+      fileSize: asInt(json['file_size'] ?? json['file_size_bytes']),
       fileUrl: json['file_url'] as String,
       uploadedAt: DateTime.parse(json['upload_at'] ?? json['uploaded_at']),
     );

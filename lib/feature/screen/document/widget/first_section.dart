@@ -6,9 +6,6 @@ Widget fromEmployee() {
     children: [
       Row(
         children: [
-          /* Image of Employee(Poster) */
-          CircleAvatar(radius: 30, backgroundColor: Colors.blue),
-          SizedBox(width: 10),
           /*Employee_name; Department and Create_date*/
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,

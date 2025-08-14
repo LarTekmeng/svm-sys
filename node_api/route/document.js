@@ -1,25 +1,58 @@
+// routes/documents.js
+'use strict';
+
 const router = require('express').Router();
 const auth   = require('../middleware/authMiddleware');
 const multer = require('multer');
+const ctrl   = require('../controller/documentController');
 
-// memory storage; 30MB per file, adjust as needed
+// ---- multipart guard (avoid Busboy generic errors for wrong headers) ----
+function multipartGuard(req, res, next) {
+  const ct = String(req.headers['content-type'] || '');
+  if (!ct.startsWith('multipart/form-data')) {
+    return res.status(415).json({ error: 'Content-Type must be multipart/form-data' });
+  }
+  // helpful trace if client disconnects mid-upload
+  req.on('aborted', () => console.warn('⚠️ request aborted by client during upload'));
+  next();
+}
+
+// ---- Multer (memory) with sane limits ----
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 30 * 1024 * 1024 },
+  limits: {
+    files: 12,                  // up to 12 files
+    fileSize: 50 * 1024 * 1024, // 50MB each
+    fields: 100,
+    parts: 200,
+  },
 });
 
-const ctrl = require('../controller/documentController');
-
-// List & simple create (JSON)
+// ---- List & simple create (JSON) ----
 router.get('/', auth, ctrl.list);
 router.post('/', auth, ctrl.create);
 
-// Register-style: create + upload files in one call
-// Send fields: document_type_id, title, description
-// Send files:  "files": [..]  (one or many)
-router.post('/with-files', auth, upload.array('files'), ctrl.createWithFiles);
+// ---- Create + upload files in one call ----
+// Fields: document_type_id, title, description
+// Files : "files": [..] (one or many)
+router.post(
+  '/with-files',
+  auth,
+  multipartGuard,
+  // wrap multer to normalize errors
+  (req, res, next) => {
+    upload.array('files', 12)(req, res, (err) => {
+      if (!err) return next();
+      if (err.code && err.code.startsWith('LIMIT')) {
+        return res.status(413).json({ error: 'Upload too large or too many files', code: err.code, message: err.message });
+      }
+      return res.status(400).json({ error: 'Malformed multipart form data', message: err.message || String(err) });
+    });
+  },
+  ctrl.createWithFiles
+);
 
-// Files helpers
+// ---- Files helpers ----
 router.get('/:documentId/files', auth, ctrl.listFiles);
 router.delete('/:documentId/files/:fileId', auth, ctrl.removeFile);
 
