@@ -1,63 +1,71 @@
 import 'package:flutter/material.dart';
 
-Widget fromEmployee() {
-  return Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      Row(
-        children: [
-          /*Employee_name; Department and Create_date*/
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('From: tekmeng (Dp: IT)',style: TextStyle(color: Colors.white),),
-              // Posted Date
-              Text('Date: 29 May 2025',style: TextStyle(color: Colors.white),)],
-          ),
-        ],
+class DocumentHeader extends StatelessWidget {
+  final String uploaderName;
+  final String uploaderDepartmentName;
+  final DateTime postedAt;
+  final bool canAct;
+  final VoidCallback? onApprove;
+  final VoidCallback? onReject;
+
+  const DocumentHeader({
+    super.key,
+    required this.uploaderName,
+    required this.uploaderDepartmentName,
+    required this.postedAt,
+    required this.canAct,
+    this.onApprove,
+    this.onReject,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('From: $uploaderName (Dp: $uploaderDepartmentName)',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text('Posted: ${_fmt(postedAt)}',
+                style: Theme.of(context).textTheme.bodySmall),
+            if (canAct) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.check),
+                      onPressed: onApprove,
+                      label: const Text('Approve'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.close),
+                      onPressed: onReject,
+                      label: const Text('Reject'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
-      /*if viewer = poster this section is hidden and if viewer = receiver this section is visible in other to take action and appear only when flow = ask permission*/
-      Row(
-        children: [
-          GestureDetector(
-            onTap: (){
-              print('Approved Document');
-            },
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.green, // background color
-              ),
-              child: Center(
-                child: Icon(
-                  Icons.check,
-                  color: Colors.white, // icon color
-                ),
-              ),
-            ),
-          ),
-          SizedBox(width: 10,),
-          GestureDetector(
-            onTap: (){
-              print('Rejected Document');
-            },
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.red, // background color
-              ),
-              child: Center(
-                child: Text('X',style: TextStyle(color: Colors.white,fontWeight: FontWeight.w500,fontSize: 20),),
-              ),
-            ),
-          ),
-        ],
-      )
-      /*end*/
-    ],
-  );
+    );
+  }
+
+  String _fmt(DateTime dt) {
+    final y = dt.year.toString().padLeft(4, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return '$y-$m-$d $hh:$mm';
+  }
 }

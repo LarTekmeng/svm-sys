@@ -7,5 +7,6 @@ router.delete('/:id', authMiddleware, ctrl.delete);
 router.put('/:id', authMiddleware, ctrl.update);
 router.get('/:id', authMiddleware, ctrl.getId);
 router.put('/:documentTypeId/flow', authMiddleware, ctrl.updateFlow);
+router.get('/:documentTypeId/flow', authMiddleware, ctrl.getFlow);
 
 module.exports = router;

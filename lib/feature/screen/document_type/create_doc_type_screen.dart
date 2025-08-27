@@ -14,6 +14,7 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   final _formKey = GlobalKey<FormState>();
+  late final AuthRepository authRepo;
 
   bool _isLoading = false;
   String _error = '';
@@ -46,13 +47,15 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
     try {
       if (widget.existing == null) {
         // CREATE
-        await DoctypeRepository().newDocType(
+        final doctypeRepo = context.read<DoctypeRepository>();
+        await doctypeRepo.newDocType(
           _titleController.text.trim(),
           _descriptionController.text.trim(),
         );
       } else {
         // UPDATE
-        await DoctypeRepository().updateDocType(
+        final doctypeRepo = context.read<DoctypeRepository>();
+        await doctypeRepo.updateDocType(
           widget.existing!.id!,
           _titleController.text.trim(),
           _descriptionController.text.trim(),

@@ -9,16 +9,35 @@ export 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /* ===== */
 
 /*Login BLOC*/
-export 'package:online_doc_savimex/feature/bloc/login_bloc/bloc.dart';
-export 'package:online_doc_savimex/feature/bloc/login_bloc/event.dart';
-export 'package:online_doc_savimex/feature/bloc/login_bloc/state.dart';
+export 'package:online_doc_savimex/feature/bloc/loginBLoC/login_bloc.dart';
+export 'package:online_doc_savimex/feature/bloc/loginBLoC/register_event.dart';
+export 'package:online_doc_savimex/feature/bloc/loginBLoC/register_state.dart';
 /* ===== */
 
 /*Register BLOC*/
-export 'package:online_doc_savimex/feature/bloc/register_bloc/bloc.dart';
-export 'package:online_doc_savimex/feature/bloc/register_bloc/event.dart';
-export 'package:online_doc_savimex/feature/bloc/register_bloc/state.dart';
+export 'package:online_doc_savimex/feature/bloc/registerBLoC/register_bloc.dart';
+export 'package:online_doc_savimex/feature/bloc/registerBLoC/register_event.dart';
+export 'package:online_doc_savimex/feature/bloc/registerBLoC/register_state.dart';
 /* ===== */
+
+/*Home BLoC*/
+export 'package:online_doc_savimex/feature/bloc/homeBLoC/home_bloc.dart';
+export 'package:online_doc_savimex/feature/bloc/homeBLoC/home_state.dart';
+export 'package:online_doc_savimex/feature/bloc/homeBLoC/home_event.dart';
+/* ===== */
+
+/*upload BLoC*/
+export 'package:online_doc_savimex/feature/bloc/uploadBLoC/upload_bloc.dart';
+export 'package:online_doc_savimex/feature/bloc/uploadBLoC/upload_event.dart';
+export 'package:online_doc_savimex/feature/bloc/uploadBLoC/upload_state.dart';
+/* ===== */
+
+/*view BLoC*/
+export 'package:online_doc_savimex/feature/bloc/viewBLoC/view_bloc.dart';
+export 'package:online_doc_savimex/feature/bloc/viewBLoC/view_state.dart';
+export 'package:online_doc_savimex/feature/bloc/viewBLoC/view_event.dart';
+/* ===== */
+
 
 /*Screen route*/
 export 'package:online_doc_savimex/feature/screen/register/register.dart';
@@ -57,9 +76,6 @@ export 'package:online_doc_savimex/feature/model/document_type.dart';
 export 'package:online_doc_savimex/feature/model/employee.dart';
 /* ===== */
 
-/*Service*/
-export 'package:online_doc_savimex/feature/service/document_service.dart';
-/* ===== */
 
 String getLocalhost(){
   if(Platform.isAndroid){

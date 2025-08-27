@@ -20,6 +20,11 @@ dependencies:
   jwt_decode: ^0.3.1
   dio: ^5.8.0+1
   file_picker: ^10.3.0
+  http_parser: ^4.1.2
+  mime: ^2.0.0
+  device_info_plus: ^11.5.0
+  cached_network_image: ^3.4.1
+  flutter_cache_manager: ^3.4.1
 
 dev_dependencies:
   flutter_test:

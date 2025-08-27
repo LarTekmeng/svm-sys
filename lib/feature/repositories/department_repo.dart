@@ -4,14 +4,16 @@ import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:online_doc_savimex/app_import.dart';
+import 'package:online_doc_savimex/feature/service/device_info.dart';
 
 
 class DepartmentRepository {
 
-  final String _bashUrl = getLocalhost();
+  final String baseUrl;
+  DepartmentRepository({required this.baseUrl});
   /// Fetches all departments from GET /api/departments/department
   Future<List<Department>> fetchDepartments() async {
-    final url = Uri.parse('$_bashUrl/api/departments/all');
+    final url = Uri.parse('$baseUrl/api/departments/all');
     final response = await http.get(url);
 
     if (response.statusCode != 200) {

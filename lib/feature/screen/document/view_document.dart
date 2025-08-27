@@ -1,106 +1,203 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
+import 'package:mime/mime.dart';
+import 'package:online_doc_savimex/app_import.dart';
 import 'package:online_doc_savimex/feature/screen/document/widget/first_section.dart';
 import 'package:online_doc_savimex/feature/screen/document/widget/step.dart';
 
-void main() {
-  runApp(const MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: DocumentScreen(),
-  ));
-}
-
 class DocumentScreen extends StatelessWidget {
-  const DocumentScreen({super.key});
+  final int documentId;
+  const DocumentScreen({super.key, required this.documentId});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios), onPressed: (){Navigator.pop(context);}, ),
-        backgroundColor: Color.fromRGBO(0, 105, 133, 1),
-        elevation: 0,
-      ),
-      backgroundColor: Color.fromRGBO(0, 105, 133, 1),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            fromEmployee(),
-            const Divider(),
-            const TimelineStep(
-              step: 1,
-              name: "Pheak (HR)",
-              status: "Checked",
-              date: "1 January 2031",
-            ),
-            const TimelineStep(
-              step: 2,
-              name: "Rith (Accounting)",
-              status: "Checked",
-              date: "2 January 2031",
-            ),
-            const TimelineStep(
-              step: 3,
-              name: "Boss (CEO)",
-              status: "Approved",
-              date: "5 January 2031",
-            ),
-            const Divider(),
-            const SizedBox(height: 10),
-            const Text("Document Title",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-            const Text("This is the main description of this document...",style: TextStyle(color: Colors.white),),
-            const SizedBox(height: 10),
-            /*this is original file that upload by the poster*/
-            const DocumentBox(from: "tekmeng (IT)"),
-            /*this file is added during other employee check*/
-            const DocumentBox(from: "Pheak (HR)"),
-            /*this file is added during other employee check*/
-            const DocumentBox(from: "Rith (Account)"),
-          ],
-        ),
-      ),
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            /* this Icon is where other employee beside employee that posted the current document to add more file into document */
-            IconButton(onPressed: (){}, icon: Icon(Icons.attachment_outlined)),
-            /*this Icon is chat room that connect with current poster and current viewer*/
-            IconButton(onPressed: (){}, icon: Icon(Icons.chat)),
-          ],
-        ),
-      ),
+    final repo = context.read<DocumentRepository>();
+
+    return BlocProvider(
+      create: (_) => ViewBloc(repo: repo)..add(ViewStarted(documentId)),
+      child: const _DocumentView(),
     );
   }
 }
 
-class DocumentBox extends StatelessWidget {
-  final String? from;
-  const DocumentBox({super.key, this.from});
+class _DocumentView extends StatefulWidget {
+  const _DocumentView();
+
+  @override
+  State<_DocumentView> createState() => _DocumentViewState();
+}
+
+class _DocumentViewState extends State<_DocumentView> {
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (from != null) Text("From: $from"),
-        Container(
-          margin: const EdgeInsets.only(top: 4, bottom: 16),
-          height: 150,
-          color: Colors.grey.shade300,
-          alignment: Alignment.center,
-          child: Transform.rotate(
-            angle: -0.3,
-            child: const Text(
-              "This is Document",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ),
-        Text('This is description')
-      ],
+    return BlocConsumer<ViewBloc, ViewState>(
+      listenWhen: (prev, curr) => prev.flashId != curr.flashId && curr.flash != null,
+      listener: (context, state) {
+        if (state.flash != null) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.flash!)));
+          context.read<ViewBloc>().add(const ViewClearFlash());
+        }
+      },
+      builder: (context, state) {
+        switch (state.status) {
+          case ViewStatus.initial:
+          case ViewStatus.loading:
+            return Scaffold(
+              appBar: AppBar(title: const Text('Document')),
+              body: const Center(child: CircularProgressIndicator()),
+            );
+          case ViewStatus.error:
+            return Scaffold(
+              appBar: AppBar(title: const Text('Document')),
+              body: Center(child: Text(state.error ?? 'Unknown error')),
+            );
+          case ViewStatus.loaded:
+            final d = state.detail!;
+            return Scaffold(
+              appBar: AppBar(title: const Text('Document')),
+              body: RefreshIndicator(
+                onRefresh: () async => context.read<ViewBloc>().add(const ViewRefreshed()),
+                child: ListView(
+                  children: [
+                    // Header (From + Date + Approve/Reject when allowed)
+                    DocumentHeader(
+                      uploaderName: d.uploaderName,
+                      uploaderDepartmentName: d.uploaderDepartmentName,
+                      postedAt: d.createdAt,
+                      canAct: d.canAct,
+                      onApprove: state.actBusy ? null : () => context.read<ViewBloc>().add(const ViewApprovePressed()),
+                      onReject: state.actBusy ? null : () => context.read<ViewBloc>().add(const ViewRejectPressed()),
+                    ),
+
+                    // Steps (only for Step by Step)
+                    DocumentSteps(
+                      forwardMode: d.forwardMode,
+                      flowsCount: d.flowsCount,
+                      steps: d.steps,
+                    ),
+
+                    // Your document form / content
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(d.title, style: Theme.of(context).textTheme.titleLarge),
+                              const SizedBox(height: 8),
+                              Text(d.description ?? ''),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Attachments
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Attachments', style: Theme.of(context).textTheme.titleMedium),
+                              const SizedBox(height: 8),
+                              if (state.files.isEmpty) const Text('No files'),
+                              for (final f in state.files)
+                                ListTile(
+                                  dense: true,
+                                  title: Text(f.fileName),
+                                  subtitle: Text('${f.fileType} • ${(f.fileSize / 1024).toStringAsFixed(1)} KB'),
+                                  trailing: Text(_fmt(f.uploadedAt), style: Theme.of(context).textTheme.bodySmall),
+                                  onTap: () {
+                                    // TODO: open f.fileUrl with url_launcher
+                                  },
+                                ),
+                              const SizedBox(height: 4),
+                              if (state.uploadBusy)
+                                const LinearProgressIndicator(minHeight: 2),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 100),
+                  ],
+                ),
+              ),
+
+              // Bottom attachment bar (only when canAttach)
+              bottomNavigationBar: d.canAttach
+                  ? SafeArea(
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.attach_file),
+                          label: const Text('Add attachment'),
+                          onPressed: state.uploadBusy ? null : () => _pickAndDispatchFiles(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+                  : null,
+            );
+        }
+      },
     );
+  }
+
+  Future<void> _pickAndDispatchFiles(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      withData: kIsWeb, // web: bytes provided; mobile: we'll read from path
+    );
+    if (result == null) return;
+
+    final files = <UploadFilePayload>[];
+
+    for (final f in result.files) {
+      // 1) Get bytes: prefer in-memory; else read from disk (mobile/desktop)
+      List<int>? bytes = f.bytes; // Uint8List implements List<int>
+      if (bytes == null && f.path != null) {
+        try {
+          bytes = await File(f.path!).readAsBytes();
+        } catch (_) {
+          // unreadable file (permissions/uri), skip
+        }
+      }
+      if (bytes == null) continue;
+
+      // 2) Determine MIME reliably (don’t rely on PlatformFile.mimeType)
+      final mime = lookupMimeType(f.path ?? f.name, headerBytes: bytes) ?? 'application/octet-stream';
+
+      files.add(UploadFilePayload(
+        name: f.name,
+        bytes: bytes,
+        mime: mime,
+      ));
+    }
+
+    if (files.isEmpty) return;
+    context.read<ViewBloc>().add(ViewUploadPicked(files));
+  }
+
+
+
+  String _fmt(DateTime dt) {
+    final y = dt.year.toString().padLeft(4, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return '$y-$m-$d $hh:$mm';
   }
 }

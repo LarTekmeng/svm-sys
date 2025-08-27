@@ -1,46 +1,54 @@
 import 'package:online_doc_savimex/feature/presentation/splash_screen.dart';
+import 'package:online_doc_savimex/feature/service/device_info.dart';
 import 'app_import.dart';
 
+// If NOT exported by app_import.dart, uncomment this explicit import:
+// import 'package:online_doc_savimex/feature/data/repository/document_repo.dart';
+
 void main() async {
-
   WidgetsFlutterBinding.ensureInitialized();
-
-  final authRepo = AuthRepository.instance;
+  final baseUrl = await ApiHost.resolve();
+  final authRepo = await AuthRepository.create();
   await authRepo.init();
 
-  final departmentRepo = DepartmentRepository();
-  final employeeRepo   = EmployeeRepository();
-  final doctypeRepo = DoctypeRepository();
-  final homeRepo = HomeRepo();
-
+  final departmentRepo = DepartmentRepository(baseUrl: baseUrl);
+  final employeeRepo   = EmployeeRepository(baseUrl: baseUrl);
+  final doctypeRepo    = DoctypeRepository(baseUrl: baseUrl, authRepo: authRepo, empRepo: employeeRepo, deptRepo: departmentRepo);
+  final homeRepo       = HomeRepo(baseUrl: baseUrl, authRepo: authRepo );
+  final documentRepo = DocumentRepository(baseUrl: baseUrl, authRepo: authRepo);
 
   runApp(
     MultiRepositoryProvider(
       providers: [
-        RepositoryProvider<AuthRepository>.value(value: authRepo,),
-        RepositoryProvider<DepartmentRepository>.value(value: departmentRepo,),
-        RepositoryProvider<EmployeeRepository>.value(value: employeeRepo,),
-        RepositoryProvider<DoctypeRepository>.value(value: doctypeRepo,),
-        RepositoryProvider<HomeRepo>.value(value: homeRepo,),
+        RepositoryProvider<AuthRepository>.value(value: authRepo),
+        RepositoryProvider<DepartmentRepository>.value(value: departmentRepo),
+        RepositoryProvider<EmployeeRepository>.value(value: employeeRepo),
+        RepositoryProvider<DoctypeRepository>.value(value: doctypeRepo),
+        RepositoryProvider<HomeRepo>.value(value: homeRepo),
+        RepositoryProvider<DocumentRepository>.value(value: documentRepo),
       ],
       child: MultiBlocProvider(
         providers: [
           // Registration Bloc (loads departments up-front)
           BlocProvider<RegisterBloc>(
-            create:
-                (ctx) => RegisterBloc(
-                  depRepo: ctx.read<DepartmentRepository>(),
-                  authRepo: ctx.read<AuthRepository>(),
-                )..add(LoadDepartments()),
+            create: (ctx) => RegisterBloc(
+              depRepo: ctx.read<DepartmentRepository>(),
+              authRepo: ctx.read<AuthRepository>(),
+            )..add(LoadDepartments()),
           ),
           BlocProvider<AuthLoginBloc>(
-            create:
-                (ctx) =>
-                    AuthLoginBloc(ctx.read<AuthRepository>(),)
-                      ..add(AppStarted()),
+            create: (ctx) => AuthLoginBloc(ctx.read<AuthRepository>())..add(AppStarted()),
           ),
-
-          // (You can add other Blocs here, e.g. AuthBloc, EmployeeBloc, etc.)
+          BlocProvider<HomeBloc>(
+            create: (ctx) => HomeBloc(homeRepo: ctx.read<HomeRepo>())
+              ..add(const HomeStarted()),
+          ),
+          BlocProvider<UploadBloc>(
+            create: (ctx) => UploadBloc(
+              documentRepo: ctx.read<DocumentRepository>(),
+              homeBloc: ctx.read<HomeBloc>(), // <-- cross-bloc reference
+            ),
+          ),
         ],
         child: const MyApp(),
       ),
@@ -56,7 +64,6 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -65,13 +72,8 @@ class _MyAppState extends State<MyApp> {
       routes: {
         '/': (context) => SplashScreen(),
         '/login': (context) => LoginScreen(),
-        //'/home': (context) => HomeScreen(repo: context.read<HomeRepo>()),
         '/home': (context) {
-          final employee =
-          ModalRoute
-              .of(context)!
-              .settings
-              .arguments as Employee;
+          final employee = ModalRoute.of(context)!.settings.arguments as Employee;
           return Homescreen(employeeID: employee.employeeID);
         }
       },

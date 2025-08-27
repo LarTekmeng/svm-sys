@@ -138,7 +138,8 @@ class DocTypeCard extends StatelessWidget {
     );
     if (ok != true) return;
     try {
-      await DoctypeRepository().deleteDocType(id);
+      final repo = context.read<DoctypeRepository>();
+      await repo.deleteDocType(id);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Deleted "$title"')));

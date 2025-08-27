@@ -252,3 +252,41 @@ exports.getId = async (req, res) => {
         res.status(500).json({ error: 'Error fetching document types' });
     }
 };
+
+exports.getFlow = async (req, res) => {
+    const docTypeId = parseInt(req.params.documentTypeId, 10);
+    const ownerId = req.employee?.id;
+    if(!ownerId) return res.status(401).json({ error: 'Not Authenticated '});
+
+    const row = await db.oneOrNone(
+        `SELECT owner_id FROM document_types WHERE id = $1`,
+        [docTypeId]
+    );
+
+    if(!row) return res.status(404).json({ error: 'Not Found! '});
+    if(row.owner_id !== ownerId) return res.status(403).json({ error: 'Forbidden' });
+
+    const settings = await db.oneOrNone(
+        `SELECT action, forward_mode
+            FROM document_type_settings
+            WHERE document_type_id = $1
+            LIMIT 1
+        `,
+        [docTypeId]
+    );
+    const flow = await db.any(
+        `
+            SELECT sequence, department_id, employee_id, step_action
+            FROM document_type_flows
+            WHERE document_type_id = $1
+            ORDER BY sequence ASC
+        `,
+        [docTypeId]
+    );
+
+    return res.json({
+        document_type_id : docTypeId,
+        settings : settings ?? { action : 'Read-Only', forward_mode : 'Direct' },
+        flows,
+    });
+};

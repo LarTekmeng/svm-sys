@@ -28,9 +28,23 @@ const upload = multer({
   },
 });
 
-// ---- List & simple create (JSON) ----
-router.get('/', auth, ctrl.list);
-router.post('/', auth, ctrl.create);
+router.get('/:id/detail', auth, ctrl.detail);
+router.post('/:id/steps/:stepId/decision', auth, ctrl.decideStep);
+router.post(
+  '/:id/files',
+  auth,
+  multipartGuard,
+  (req, res, next) => {
+    upload.array('files', 12)(req, res, (err) => {
+      if (!err) return next();
+      if (err.code && err.code.startsWith('LIMIT')) {
+        return res.status(413).json({ error: 'Upload too large or too many files', code: err.code, message: err.message });
+      }
+      return res.status(400).json({ error: 'Malformed multipart form data', message: err.message || String(err) });
+    });
+  },
+  ctrl.addFilesToExisting
+);
 
 // ---- Create + upload files in one call ----
 // Fields: document_type_id, title, description

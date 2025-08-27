@@ -1,5 +1,4 @@
 import 'package:online_doc_savimex/app_import.dart';
-import 'package:online_doc_savimex/feature/repositories/doctype_repo.dart';
 
 class SetDocumentTypeScreen extends StatefulWidget {
   final int documentTypeId;
@@ -10,7 +9,7 @@ class SetDocumentTypeScreen extends StatefulWidget {
 }
 
 class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
-  final _repo = DoctypeRepository();
+  late final DoctypeRepository _repo;
 
   String selectedAction = 'Read-Only';
   String selectedForwardMode = '';
@@ -32,7 +31,8 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadMetadata();
+    _repo = context.read<DoctypeRepository>();
+    _loadMetadata().then((_) => _prefillFromServer());
   }
 
   Future<void> _loadMetadata() async {
@@ -107,6 +107,74 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
     );
     Navigator.pop(context, true);
   }
+
+  Future<void> _prefillFromServer() async {
+    try {
+      final data = await _repo.fetchDocTypeFlow(widget.documentTypeId);
+      final settings = (data['settings'] ?? {}) as Map<String, dynamic>;
+      final serverFlows = (data['flows'] ?? []) as List;
+
+      final serverAction = (settings['action'] ?? 'Read-Only').toString();
+      final serverMode   = (settings['forward_mode'] ?? '').toString();
+
+      // Set the main action first
+      setState(() {
+        selectedAction = serverAction; // 'Read-Only' or 'Ask for Permission'
+      });
+
+      if (serverAction == 'Read-Only') {
+        // nothing else to expand
+        setState(() {
+          isDirectExpanded = false;
+          isStepExpanded = false;
+          selectedForwardMode = '';
+          selectedDepts = List.filled(1, null, growable: true);
+          selectedEmps = List.filled(1, null, growable: true);
+          selectedActions = List.filled(1, null, growable: true);
+        });
+        return;
+      }
+
+      if (serverMode == 'Direct') {
+        setState(() {
+          isDirectExpanded = true;
+          isStepExpanded = false;
+          selectedForwardMode = 'Direct';
+          selectedDepts = List.filled(1, null, growable: true);
+          selectedEmps = List.filled(1, null, growable: true);
+          selectedActions = List.filled(1, null, growable: true);
+        });
+        if (serverFlows.isNotEmpty) {
+          final f = serverFlows.first as Map<String, dynamic>;
+          selectedDepts[0]   = (f['department_id']?.toString()) ?? 'all';
+          selectedEmps[0]    = (f['employee_id']?.toString()) ?? 'all';
+          selectedActions[0] = (f['step_action']?.toString()) ?? 'APPROVAL';
+        }
+      } else if (serverMode == 'Step by Step') {
+        final count = serverFlows.isEmpty ? 2 : serverFlows.length;
+        setState(() {
+          isDirectExpanded = false;
+          isStepExpanded = true;
+          selectedForwardMode = 'Step by Step';
+          selectedDepts   = List<String?>.filled(count, null, growable: true);
+          selectedEmps    = List<String?>.filled(count, null, growable: true);
+          selectedActions = List<String?>.filled(count, null, growable: true);
+        });
+        for (var i = 0; i < serverFlows.length; i++) {
+          final f = serverFlows[i] as Map<String, dynamic>;
+          selectedDepts[i]   = (f['department_id']?.toString()) ?? 'all';
+          selectedEmps[i]    = (f['employee_id']?.toString()) ?? 'all';
+          selectedActions[i] = (f['step_action']?.toString()) ?? 'APPROVAL';
+        }
+      } else {
+        // unknown or empty mode; leave defaults
+      }
+    } catch (e) {
+      // Optional: show a snack bar, but don’t break the page
+      debugPrint('Prefill failed: $e');
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {

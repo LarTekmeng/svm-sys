@@ -23,7 +23,17 @@ double asDouble(dynamic v, {double? or}) {
   throw FormatException("Expected double, got: $v (${v.runtimeType})");
 }
 
-
+DateTime _epoch0() => DateTime.fromMillisecondsSinceEpoch(0);
+DateTime _safeDate(dynamic v, {DateTime? or}) {
+  if (v == null) return or ?? _epoch0();
+  if (v is DateTime) return v;
+  if (v is String && v.isNotEmpty) {
+    try { return DateTime.parse(v); } catch (_) {
+      try { return DateTime.parse(v.replaceAll(' ', 'T')); } catch (_) {}
+    }
+  }
+  return or ?? _epoch0();
+}
 
 class Document {
   final int? id;
@@ -165,25 +175,114 @@ class DocumentFile {
     required this.uploadedAt,
   });
 
-  factory DocumentFile.fromJson(Map<String, dynamic> json) {
-    return DocumentFile(
-      id: json['id'] as int,
-      documentId: json['document_id'] as int,
-      fileName: json['file_name'] as String,
-      fileType: json['file_type'] as String,
-      fileSize: asInt(json['file_size'] ?? json['file_size_bytes']),
-      fileUrl: json['file_url'] as String,
-      uploadedAt: DateTime.parse(json['upload_at'] ?? json['uploaded_at']),
+  factory DocumentFile.fromJson(Map<String, dynamic> json) => DocumentFile(
+    id: asInt(json['id']),
+    documentId: asInt(json['document_id']),
+    fileName: (json['file_name'] ?? '') as String,
+    fileType: (json['file_type'] ?? '') as String,
+    fileSize: asInt(json['file_size'] ?? json['file_size_bytes']),
+    fileUrl: (json['file_url'] ?? '') as String,
+    uploadedAt: _safeDate(json['uploaded_at'] ?? json['upload_at']),
+  );
+}
+
+
+class DocumentDetail {
+  // actionability from backend
+  final int? currentActionableStepId;
+  final String? currentActionableStepAction;
+  final bool canAct;     // Approve/Reject
+  final bool canAttach;  // Add attachment
+
+  // core
+  final int id;
+  final String title;
+  final String description;
+  final String status;
+  final DateTime createdAt;
+
+  // meta
+  final String documentTypeTitle;
+  final String forwardMode; // Direct | Step by Step
+  final String uploaderName;
+  final String uploaderDepartmentName;
+
+  // steps
+  final int flowsCount;        // defined in flow
+  final List<DocumentStep> steps; // current instance steps
+
+  const DocumentDetail({
+    required this.currentActionableStepId,
+    required this.currentActionableStepAction,
+    required this.canAct,
+    required this.canAttach,
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.status,
+    required this.createdAt,
+    required this.documentTypeTitle,
+    required this.forwardMode,
+    required this.uploaderName,
+    required this.uploaderDepartmentName,
+    required this.flowsCount,
+    required this.steps,
+  });
+
+  factory DocumentDetail.fromJson(Map<String, dynamic> json) {
+    final doc = (json['document'] as Map<String, dynamic>);
+    final stepsJson = (json['steps'] as List).cast<Map<String, dynamic>>();
+    return DocumentDetail(
+      currentActionableStepId: json['current_actionable_step_id'] as int?,
+      currentActionableStepAction: json['current_actionable_step_action'] as String?,
+      canAct: json['canAct'] == true,
+      canAttach: json['canAttach'] == true,
+
+      id: asInt(doc['id']),
+      title: (doc['title'] ?? '') as String,
+      description: (doc['description'] ?? '') as String,
+      status: ((doc['status'] ?? 'PENDING') as String).toUpperCase(),
+      createdAt: _safeDate(doc['created_at']),
+
+      documentTypeTitle: (doc['document_type_title'] ?? '') as String,
+      forwardMode: (doc['forward_mode'] ?? 'Direct') as String,
+      uploaderName: (doc['uploader_name'] ?? '') as String,
+      uploaderDepartmentName: (doc['uploader_department_name'] ?? '-') as String,
+
+      flowsCount: asInt(json['flowsCount'], or: 0),
+      steps: stepsJson.map(DocumentStep.fromJson).toList(),
     );
   }
+}
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'document_id': documentId,
-    'file_name': fileName,
-    'file_type': fileType,
-    'file_size': fileSize,
-    'file_url': fileUrl,
-    'uploaded_at': uploadedAt.toIso8601String(),
-  };
+class DocumentStep {
+  final int id;
+  final int sequence;
+  final int employeeId;
+  final String employeeName;
+  final String departmentName;
+  /// Display only (APPROVAL / SIGNATURE)
+  final String stepAction;
+  /// PENDING | APPROVED | REJECTED
+  final String status;
+
+  const DocumentStep({
+    required this.id,
+    required this.sequence,
+    required this.employeeId,
+    required this.employeeName,
+    required this.departmentName,
+    required this.stepAction,
+    required this.status,
+  });
+
+  factory DocumentStep.fromJson(Map<String, dynamic> j) => DocumentStep(
+    id: asInt(j['id']),
+    sequence: asInt(j['sequence']),
+    employeeId: asInt(j['employee_id']),
+    employeeName: (j['employee_name'] ?? '-') as String,
+    departmentName: (j['department_name'] ?? '-') as String,
+    stepAction: (j['step_action'] ?? '') as String,
+    status: (j['status'] ?? '') as String,
+  );
 }

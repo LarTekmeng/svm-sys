@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter/material.dart';
 import 'package:online_doc_savimex/app_import.dart';
-import 'package:online_doc_savimex/feature/repositories/doctype_repo.dart';
+
+import '../../bloc/uploadBLoC/upload_bloc.dart';
+import '../../bloc/uploadBLoC/upload_event.dart';
+import '../../bloc/uploadBLoC/upload_state.dart';
 
 class UploadScreen extends StatefulWidget {
   final String employeeID;
@@ -28,34 +30,33 @@ class _UploadScreenState extends State<UploadScreen> {
   final List<PlatformFile> _files = [];
 
   bool _loadingTypes = true;
-  bool _submitting   = false;
+  bool _submitting   = false;     // kept for button disable/opacity only
   String? _error;
 
   // repos
   late final DoctypeRepository _doctypeRepo;
-  late final DocumentRepository _docRepo;
-  late final AuthRepository _authRepo; // whatever you use for tokens
+  // REMOVE direct repository usage for creating documents:
+  // late final DocumentRepository _docRepo;
+  late final AuthRepository _authRepo;
 
   @override
   void initState() {
     super.initState();
-    _doctypeRepo = DoctypeRepository();
-    _authRepo    = AuthRepository.instance; // or get it via DI if you have one
+    _doctypeRepo = context.read<DoctypeRepository>();
+    _authRepo    = context.read<AuthRepository>();
     _initRepoAndLoadTypes();
   }
 
   Future<void> _initRepoAndLoadTypes() async {
-    // get token once for now; you can switch to a sync getter if you keep it in memory
-    final token = await _authRepo.getPersistedToken();
-    _docRepo = DocumentRepository(tokenProvider: () => token ?? '');
-
+    // If you need token here for other calls, keep it — not needed for upload now
+    await _authRepo.getPersistedToken();
+    // _docRepo = DocumentRepository(); // <-- remove
     await _loadDoctypes();
   }
 
   Future<void> _loadDoctypes() async {
     setState(() { _loadingTypes = true; _error = null; });
     try {
-      // adjust to your actual method name; most likely fetchDocumentTypes()
       final types = await _doctypeRepo.getDoctypeById(widget.employeeID);
       setState(() {
         _types = types;
@@ -90,7 +91,6 @@ class _UploadScreenState extends State<UploadScreen> {
     final result = await FilePicker.platform.pickFiles(allowMultiple: true);
     if (result == null) return;
 
-    // merge & dedupe by path+size
     final incoming = result.files.where((f) => f.path != null);
     final existingKeys = _files.map((f) => '${f.path}|${f.size}').toSet();
 
@@ -119,37 +119,24 @@ class _UploadScreenState extends State<UploadScreen> {
       return;
     }
 
-    setState(() { _submitting = true; _error = null; });
+    // Gather files for the event
+    final files = _files
+        .where((pf) => pf.path != null)
+        .map((pf) => File(pf.path!))
+        .toList();
 
-    try {
-      final files = _files
-          .where((pf) => pf.path != null)
-          .map((pf) => File(pf.path!))
-          .toList();
-
-      // If you want to store schedule date later, add it to backend & repo; currently unused
-      final res = await _docRepo.createDocumentWithFiles(
+    // Dispatch to UploadBloc instead of calling repo directly
+    context.read<UploadBloc>().add(
+      UploadSubmitted(
         documentTypeId: _selectedType!.id as int,
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
         files: files,
-      );
+      ),
+    );
 
-      // success UX
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Uploaded successfully')),
-        );
-        Navigator.of(context).pop(true); // or push to home
-      }
-    } catch (e) {
-      setState(() => _error = '$e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Upload failed: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
+    // Flip local “submitting” just for disabling the button/opacity (UI unchanged)
+    setState(() { _submitting = true; _error = null; });
   }
 
   @override
@@ -162,6 +149,33 @@ class _UploadScreenState extends State<UploadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Wrap body with a BlocListener to respond to success/failure
+    return BlocListener<UploadBloc, UploadState>(
+      listenWhen: (prev, curr) => prev.status != curr.status,
+      listener: (context, state) {
+        if (state.status == UploadStatus.success) {
+          // Show toast
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Uploaded successfully')),
+          );
+          // Reset local submitting flag
+          if (mounted) setState(() => _submitting = false);
+          // Pop to previous page (Home will already be refreshed by UploadBloc -> HomeBloc)
+          if (mounted) Navigator.of(context).pop(true);
+        } else if (state.status == UploadStatus.failure) {
+          if (mounted) {
+            setState(() { _submitting = false; _error = state.error; });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Upload failed: ${state.error ?? 'Unknown error'}')),
+            );
+          }
+        }
+      },
+      child: _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     final ready = !_submitting && !_loadingTypes;
 
     return Scaffold(
@@ -191,9 +205,8 @@ class _UploadScreenState extends State<UploadScreen> {
                         hintText: 'document title',
                         border: OutlineInputBorder(),
                       ),
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Title is required'
-                          : null,
+                      validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Title is required' : null,
                     ),
                     const SizedBox(height: 16),
 
@@ -245,10 +258,9 @@ class _UploadScreenState extends State<UploadScreen> {
                         'Upload your file: (image, pdf, word, excel...)'),
                     const SizedBox(height: 8),
 
-                    // single block that triggers file picker
+                    // file picker trigger
                     UploadBlock(onTapPickFiles: _pickFiles),
 
-                    // show selected files
                     if (_files.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       Wrap(
@@ -284,8 +296,7 @@ class _UploadScreenState extends State<UploadScreen> {
                     if (_error != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 12),
-                        child:
-                        Text(_error!, style: const TextStyle(color: Colors.red)),
+                        child: Text(_error!, style: const TextStyle(color: Colors.red)),
                       ),
 
                     const SizedBox(height: 24),
@@ -319,13 +330,13 @@ class LabelWithAsterisk extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RichText(
-      text: TextSpan(
-        text: label,
-        style: const TextStyle(color: Colors.black, fontSize: 16),
-        children: const [
-          TextSpan(text: ' *', style: TextStyle(color: Colors.red))
+      text: const TextSpan(
+        style: TextStyle(color: Colors.black, fontSize: 16),
+        children: [
+          // Leading text will be injected by outer TextSpan
         ],
       ),
+      textScaler: MediaQuery.textScalerOf(context),
     );
   }
 }

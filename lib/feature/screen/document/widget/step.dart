@@ -1,63 +1,58 @@
-import 'package:flutter/material.dart';
+import 'package:online_doc_savimex/app_import.dart';
 
-class TimelineStep extends StatelessWidget {
-  final int step;
-  final String name;
-  final String status;
-  final String date;
+class DocumentSteps extends StatelessWidget {
+  final String forwardMode; // 'Direct' | 'Step by Step'
+  final int flowsCount;
+  final List<DocumentStep> steps;
 
-  const TimelineStep({
+  const DocumentSteps({
     super.key,
-    required this.step,
-    required this.name,
-    required this.status,
-    required this.date,
+    required this.forwardMode,
+    required this.flowsCount,
+    required this.steps,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
+    if (forwardMode != 'Step by Step') return const SizedBox.shrink();
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: Colors.blue,
-              child: Text('$step', style: const TextStyle(color: Colors.white)),
+            Text('Sequence ($flowsCount steps)',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: steps.map((s) => _StepChip(s)).toList(),
             ),
-            if (step < 3)
-              Container(width: 2, height: 20, color: Colors.grey.shade400),
           ],
         ),
-        const SizedBox(width: 12),
-        // Align text vertically with the center of the circle
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 12), // Adjust for vertical alignment
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(text: "$name → ",style: TextStyle(color: Colors.white)),
-                  TextSpan(
-                    text: "$status",
-                    style: TextStyle(
-                      color: status == "Approved"
-                          ? Colors.blue
-                          : status == "Checked"
-                          ? Colors.green
-                          : Colors.grey,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  TextSpan(text: " - $date", style: TextStyle(color: Colors.white)),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
+  }
+}
 
+class _StepChip extends StatelessWidget {
+  final DocumentStep s;
+  const _StepChip(this.s);
+
+  @override
+  Widget build(BuildContext context) {
+    Color bg;
+    switch (s.status) {
+      case 'APPROVED': bg = Colors.green.withOpacity(.15); break;
+      case 'REJECTED': bg = Colors.red.withOpacity(.15); break;
+      default: bg = Colors.orange.withOpacity(.15);
+    }
+    return Chip(
+      backgroundColor: bg,
+      label: Text('#${s.sequence} • ${s.status} • ${s.employeeName}'),
+    );
   }
 }

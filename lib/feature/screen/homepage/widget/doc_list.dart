@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:online_doc_savimex/feature/screen/document/view_document.dart';
 
 class DocumentItem extends StatelessWidget {
+  final int documentId;        // <-- add this
   final String status;
   final String title;
   final String desc;
 
   const DocumentItem({
     super.key,
+    required this.documentId,  // <-- require it
     required this.status,
     required this.title,
     required this.desc,
@@ -16,20 +18,21 @@ class DocumentItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: (){Navigator.push(context, MaterialPageRoute(builder: (context) => DocumentScreen()));},
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DocumentScreen(documentId: documentId), // <-- use it
+          ),
+        );
+      },
       child: Card(
         color: Colors.transparent,
         elevation: 0,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             Row(
               children: [
                 Expanded(
@@ -44,13 +47,16 @@ class DocumentItem extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: status == "Approved" ? Colors.green : status == "Rejected" ? Colors.red : status == "In progress" ? Colors.blue : Colors.grey,
+                    color: status == "COMPLETED"
+                        ? Colors.green
+                        : status == "REJECTED"
+                        ? Colors.red
+                        : status == "PENDING"
+                        ? Colors.grey
+                        : Colors.grey,
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text(
-                    status,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                  ),
+                  child: Text(status, style: const TextStyle(color: Colors.white, fontSize: 12)),
                 ),
               ],
             ),

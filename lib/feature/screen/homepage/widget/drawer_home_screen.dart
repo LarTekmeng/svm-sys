@@ -1,4 +1,7 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:online_doc_savimex/app_import.dart';
+
+import 'avatar_cache_manager.dart';
 
 class DrawerHomeScreen extends StatefulWidget {
   final String employeeID;
@@ -10,18 +13,51 @@ class DrawerHomeScreen extends StatefulWidget {
 
 class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
   late Future<Employee> _employee;
-  final AuthRepository _authRepo = AuthRepository.instance;
+  late final AuthRepository _authRepo;
+  late final EmployeeRepository _employeeRepo;
 
   @override
   void initState() {
     super.initState();
-    _employee = context.read<EmployeeRepository>().fetchEmployeeByID(
-      widget.employeeID,
-    );
+    _authRepo = context.read<AuthRepository>();
+    _employeeRepo = context.read<EmployeeRepository>();
+
+    // Fetch employee once, and prefetch avatar into disk cache so the drawer is instant
+    _employee = _employeeRepo.fetchEmployeeByID(widget.employeeID).then((e) {
+      final url = e.profileImageUrl;
+      if (url.trim().isNotEmpty) {
+        _prefetchAvatar(url);
+      }
+      return e;
+    });
+  }
+
+  // Download to cache and pre-cache into memory for a snappy first paint
+  void _prefetchAvatar(String url) {
+    // Delay until after first frame so `context` is safe for precacheImage
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        // Ensure the file exists in the disk cache (no network needed later)
+        await AvatarCacheManager.instance.getSingleFile(url);
+        if (!mounted) return;
+
+        // Warm up memory cache for immediate display the first time
+        await precacheImage(
+          CachedNetworkImageProvider(
+            url,
+            cacheManager: AvatarCacheManager.instance,
+          ),
+          context,
+        );
+      } catch (_) {
+        // Ignore prefetch failures; the UI will still fallback gracefully
+      }
+    });
   }
 
   void _onLogout() async {
     await _authRepo.logout();
+    // ignore: use_build_context_synchronously
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => LoginScreen()),
@@ -31,22 +67,25 @@ class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: Color.fromRGBO(0, 105, 133, 1),
-      child: FutureBuilder(
+      backgroundColor: const Color.fromRGBO(0, 105, 133, 1),
+      child: FutureBuilder<Employee>(
         future: _employee,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
             return Center(
               child: Text('Error loading profile: ${snapshot.error}'),
             );
           }
-          final employee = snapshot.data;
+          final employee = snapshot.data!;
           return ListView(
             padding: EdgeInsets.zero,
-            children: [_buildHeader(employee!), ..._buildMenuTiles()],
+            children: [
+              _buildHeader(employee),
+              ..._buildMenuTiles(),
+            ],
           );
         },
       ),
@@ -54,17 +93,15 @@ class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
   }
 
   Widget _buildHeader(Employee e) {
-    final hasAvatar = e.profileImageUrl.trim().isNotEmpty ?? false;
+    final ImageProvider avatarProvider = _avatarProvider(e);
+
     return DrawerHeader(
       decoration: const BoxDecoration(color: Color.fromRGBO(0, 105, 133, 1)),
       child: Row(
         children: [
           CircleAvatar(
             radius: 30,
-            backgroundImage:
-                hasAvatar
-                    ? NetworkImage(e.profileImageUrl)
-                    : AssetImage('assets/images/user.png'),
+            backgroundImage: avatarProvider,
           ),
           const SizedBox(width: 12),
           Column(
@@ -81,6 +118,18 @@ class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
     );
   }
 
+  // Choose a cached provider or a local placeholder — never hit the network on drawer open
+  ImageProvider _avatarProvider(Employee e) {
+    final url = e.profileImageUrl; // String? is OK
+    if (url.trim().isNotEmpty) {
+      return CachedNetworkImageProvider(
+        url,
+        cacheManager: AvatarCacheManager.instance,
+      );
+    }
+    return const AssetImage('assets/images/user.png');
+  }
+
   List<Widget> _buildMenuTiles() {
     return [
       _drawerTile(Icons.category, 'Document Type', () {
@@ -92,9 +141,7 @@ class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
           ),
         );
       }),
-      _drawerTile(Icons.logout, 'Logout', () {
-        _onLogout();
-      }),
+      _drawerTile(Icons.logout, 'Logout', _onLogout),
     ];
   }
 

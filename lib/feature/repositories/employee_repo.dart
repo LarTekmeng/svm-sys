@@ -1,14 +1,13 @@
 import 'dart:convert';
-import 'dart:io';
-
 import 'package:http/http.dart' as http;
 import 'package:online_doc_savimex/app_import.dart';
 
 class EmployeeRepository{
-  final String _baseUrl = getLocalhost();
+  final String baseUrl;
+  EmployeeRepository({required this.baseUrl});
 
   Future<Employee> fetchEmployeeByID(String employeeId) async {
-    final uri = (Uri.parse('$_baseUrl/api/employees/$employeeId'));
+    final uri = (Uri.parse('$baseUrl/api/employees/$employeeId'));
     final resp = await http.get(uri);
     if (resp.statusCode != 200) {
       throw Exception('Failed to load user');
@@ -19,7 +18,7 @@ class EmployeeRepository{
   }
 
   Future<List<Employee>> getAllEmployee() async {
-    final uri = Uri.parse('$_baseUrl/api/employees/');
+    final uri = Uri.parse('$baseUrl/api/employees/');
     final resp = await http.get(uri);
     if (resp.statusCode != 200){
       throw Exception('Fail to load employee (status ${resp.statusCode})');
@@ -29,7 +28,7 @@ class EmployeeRepository{
   }
 
   Future<List<Employee>> fetchEmployeesByDepartment(int departmentId) async {
-    final url = Uri.parse('$_baseUrl/api/employees/$departmentId/');
+    final url = Uri.parse('$baseUrl/api/employees/$departmentId/');
     final response = await http.get(url);
 
     if (response.statusCode != 200) {
