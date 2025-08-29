@@ -123,31 +123,21 @@ exports.updateFlow = async (req, res) => {
   const ownerId   = req.employee?.id;
   const { action, forward_mode, flows } = req.body;
 
-  if (!ownerId)
-    return res.status(401).json({ error: 'Not Authenticated' });
+  if (!ownerId) return res.status(401).json({ error: 'Not Authenticated' });
 
-  // 1) Ownership check
   const row = await db.oneOrNone(
     `SELECT owner_id FROM document_types WHERE id = $1`,
     [docTypeId]
   );
-  if (!row)
-    return res.status(404).json({ error: 'Not found' });
-  if (row.owner_id !== ownerId)
-    return res.status(403).json({ error: 'Forbidden to Update' });
+  if (!row)  return res.status(404).json({ error: 'Not found' });
+  if (row.owner_id !== ownerId) return res.status(403).json({ error: 'Forbidden to Update' });
 
-  // 2) SQL templates
   const updateSettingSql = `
     UPDATE document_type_settings
-       SET action      = $1,
-           forward_mode = $2,
-           updated_at   = NOW()
+       SET action = $1, forward_mode = $2, updated_at = NOW()
      WHERE document_type_id = $3
   `;
-  const deleteFlowSql = `
-    DELETE FROM document_type_flows
-     WHERE document_type_id = $1
-  `;
+  const deleteFlowSql = `DELETE FROM document_type_flows WHERE document_type_id = $1`;
   const insertFlowSql = `
     INSERT INTO document_type_flows
       (document_type_id, sequence, department_id, employee_id, step_action)
@@ -156,83 +146,52 @@ exports.updateFlow = async (req, res) => {
 
   try {
     await db.tx(async t => {
-      // A) Update the settings row
       await t.none(updateSettingSql, [action, forward_mode, docTypeId]);
-
-      // B) Wipe out existing steps
       await t.none(deleteFlowSql, [docTypeId]);
 
-      // C) Expand & insert each flow element
       for (const f of flows) {
         const deptAll = (f.department_id === 'all');
         const empAll  = (f.employee_id   === 'all');
 
         if (deptAll && empAll) {
-          // → every employee in the company
-          const everyone = await t.many(`
-            SELECT id, dp_id FROM employee
-          `);
+          // every employee in the company
+          const everyone = await t.any(`SELECT id, dp_id FROM employee`);
           for (const emp of everyone) {
-            await t.none(insertFlowSql, [
-              docTypeId,
-              f.sequence,
-              emp.dp_id,
-              emp.id,
-              f.step_action
-            ]);
+            await t.none(insertFlowSql, [docTypeId, f.sequence, emp.dp_id, emp.id, f.step_action]);
           }
 
         } else if (deptAll) {
-          // → single specific employee, but unknown department → fetch their dept
-          const emp = await t.one(`
-            SELECT id, dp_id
-              FROM employee
-             WHERE id = $1
-          `, [f.employee_id]);
-          await t.none(insertFlowSql, [
-            docTypeId,
-            f.sequence,
-            emp.dp_id,
-            emp.id,
-            f.step_action
-          ]);
+          // single specific employee ⇒ infer their department
+          const emp = await t.one(
+            `SELECT id, dp_id FROM employee WHERE id = $1`,
+            [f.employee_id]
+          );
+          await t.none(insertFlowSql, [docTypeId, f.sequence, emp.dp_id, emp.id, f.step_action]);
 
         } else if (empAll) {
-          // → every employee *within* a specific department
-          const deptEmps = await t.many(`
-            SELECT id
-              FROM employee
-             WHERE dp_id = $1
-          `, [f.department_id]);
+          // every employee within a specific department
+          const deptEmps = await t.any(
+            `SELECT id FROM employee WHERE dp_id = $1`,
+            [f.department_id]
+          );
           for (const emp of deptEmps) {
-            await t.none(insertFlowSql, [
-              docTypeId,
-              f.sequence,
-              f.department_id,
-              emp.id,
-              f.step_action
-            ]);
+            await t.none(insertFlowSql, [docTypeId, f.sequence, f.department_id, emp.id, f.step_action]);
           }
 
         } else {
-          // → one specific employee in one specific department
-          await t.none(insertFlowSql, [
-            docTypeId,
-            f.sequence,
-            f.department_id,
-            f.employee_id,
-            f.step_action
-          ]);
+          // one specific employee in one specific department
+          await t.none(insertFlowSql, [docTypeId, f.sequence, f.department_id, f.employee_id, f.step_action]);
         }
       }
     });
 
     return res.json({ message: 'Flow updated (wildcards expanded)' });
   } catch (e) {
-    console.error(e);
+    console.error('updateFlow error:', e);
     return res.status(500).json({ error: 'Server error' });
   }
 };
+
 
 
 
@@ -254,39 +213,63 @@ exports.getId = async (req, res) => {
 };
 
 exports.getFlow = async (req, res) => {
+  try {
     const docTypeId = parseInt(req.params.documentTypeId, 10);
-    const ownerId = req.employee?.id;
-    if(!ownerId) return res.status(401).json({ error: 'Not Authenticated '});
+    const ownerId   = req.employee?.id;
+    if (!ownerId) return res.status(401).json({ error: 'Not Authenticated' });
 
+    // Verify ownership
     const row = await db.oneOrNone(
-        `SELECT owner_id FROM document_types WHERE id = $1`,
-        [docTypeId]
+      'SELECT owner_id FROM document_types WHERE id = $1',
+      [docTypeId]
     );
+    if (!row) return res.status(404).json({ error: 'Not Found!' });
+    if (row.owner_id !== ownerId) return res.status(403).json({ error: 'Forbidden' });
 
-    if(!row) return res.status(404).json({ error: 'Not Found! '});
-    if(row.owner_id !== ownerId) return res.status(403).json({ error: 'Forbidden' });
-
+    // Settings
     const settings = await db.oneOrNone(
-        `SELECT action, forward_mode
-            FROM document_type_settings
-            WHERE document_type_id = $1
-            LIMIT 1
-        `,
-        [docTypeId]
+      `SELECT action, forward_mode
+         FROM document_type_settings
+        WHERE document_type_id = $1
+        LIMIT 1`,
+      [docTypeId]
     );
-    const flow = await db.any(
-        `
-            SELECT sequence, department_id, employee_id, step_action
-            FROM document_type_flows
-            WHERE document_type_id = $1
-            ORDER BY sequence ASC
-        `,
-        [docTypeId]
+
+    // Flow + labels (⚠️ matches your SQL file: department, employee, name, employee_name)
+    const flows = await db.any(
+      `SELECT
+          f.sequence,
+          f.department_id,
+          d.name          AS department_name,
+          f.employee_id,
+          e.employee_name AS employee_name,
+          f.step_action
+       FROM document_type_flows f
+       LEFT JOIN department d ON d.id = f.department_id
+       LEFT JOIN employee  e ON e.id = f.employee_id
+       WHERE f.document_type_id = $1
+       ORDER BY f.sequence ASC`,
+      [docTypeId]
     );
+
+    // Expose supported actions (per CHECK constraint, at least these three)
+    const actions = ['APPROVAL', 'REVIEW', 'SIGNATURE'];
 
     return res.json({
-        document_type_id : docTypeId,
-        settings : settings ?? { action : 'Read-Only', forward_mode : 'Direct' },
-        flows,
+      document_type_id: docTypeId,
+      settings: settings ?? { action: 'Read-Only', forward_mode: 'Direct' },
+      flows: flows.map(f => ({
+        sequence: f.sequence,
+        department_id: f.department_id,
+        department: f.department_id ? { id: f.department_id, name: f.department_name } : null,
+        employee_id: f.employee_id,
+        employee: f.employee_id ? { id: f.employee_id, name: f.employee_name } : null,
+        step_action: f.step_action,
+      })),
+      actions,
     });
+  } catch (err) {
+    console.error('getFlow error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
 };
