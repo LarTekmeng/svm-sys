@@ -5,8 +5,7 @@ class UploadBlock extends StatefulWidget {
   final VoidCallback? onRemove;
   final VoidCallback? onTapPickFiles;
 
-  const UploadBlock({Key? key, this.onRemove, this.onTapPickFiles})
-      : super(key: key);
+  const UploadBlock({super.key, this.onRemove, this.onTapPickFiles});
 
   @override
   State<UploadBlock> createState() => _UploadBlockState();
@@ -34,7 +33,7 @@ class _UploadBlockState extends State<UploadBlock> {
             radius: const Radius.circular(8),
             dashPattern: const [6, 3],
             color: Colors.black45,
-            strokeWidth: 1,
+            strokeWidth: 2,
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),

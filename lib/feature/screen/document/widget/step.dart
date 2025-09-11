@@ -1,4 +1,5 @@
 import 'package:online_doc_savimex/app_import.dart';
+import 'package:online_doc_savimex/feature/widget/color.dart';
 
 class DocumentSteps extends StatelessWidget {
   final String forwardMode; // 'Direct' | 'Step by Step'
@@ -17,6 +18,7 @@ class DocumentSteps extends StatelessWidget {
     if (forwardMode != 'Step by Step') return const SizedBox.shrink();
 
     return Card(
+      color: AppColors.card,
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -24,7 +26,7 @@ class DocumentSteps extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Sequence ($flowsCount steps)',
-                style: Theme.of(context).textTheme.titleMedium),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.white)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,

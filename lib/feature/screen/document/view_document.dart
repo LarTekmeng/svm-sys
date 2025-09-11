@@ -5,6 +5,7 @@ import 'package:mime/mime.dart';
 import 'package:online_doc_savimex/app_import.dart';
 import 'package:online_doc_savimex/feature/screen/document/widget/first_section.dart';
 import 'package:online_doc_savimex/feature/screen/document/widget/step.dart';
+import 'package:online_doc_savimex/feature/widget/color.dart';
 
 class DocumentScreen extends StatelessWidget {
   final int documentId;
@@ -55,7 +56,8 @@ class _DocumentViewState extends State<_DocumentView> {
           case ViewStatus.loaded:
             final d = state.detail!;
             return Scaffold(
-              appBar: AppBar(title: const Text('Document')),
+              appBar: AppBar(title: const Text('Document'), backgroundColor: AppColors.background, foregroundColor: AppColors.white,),
+              backgroundColor: AppColors.background,
               body: RefreshIndicator(
                 onRefresh: () async => context.read<ViewBloc>().add(const ViewRefreshed()),
                 child: ListView(
@@ -81,14 +83,15 @@ class _DocumentViewState extends State<_DocumentView> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       child: Card(
+                        color: AppColors.card,
                         child: Padding(
                           padding: const EdgeInsets.all(12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(d.title, style: Theme.of(context).textTheme.titleLarge),
+                              Text(d.title, style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.white)),
                               const SizedBox(height: 8),
-                              Text(d.description ?? ''),
+                              Text(d.description ?? '', style: TextStyle(color: AppColors.white),),
                             ],
                           ),
                         ),
@@ -99,20 +102,21 @@ class _DocumentViewState extends State<_DocumentView> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       child: Card(
+                        color: AppColors.card,
                         child: Padding(
                           padding: const EdgeInsets.all(12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Attachments', style: Theme.of(context).textTheme.titleMedium),
+                              Text('Attachments', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.white)),
                               const SizedBox(height: 8),
-                              if (state.files.isEmpty) const Text('No files'),
+                              if (state.files.isEmpty) const Text('No files', style: TextStyle(color: AppColors.white),),
                               for (final f in state.files)
                                 ListTile(
                                   dense: true,
-                                  title: Text(f.fileName),
-                                  subtitle: Text('${f.fileType} • ${(f.fileSize / 1024).toStringAsFixed(1)} KB'),
-                                  trailing: Text(_fmt(f.uploadedAt), style: Theme.of(context).textTheme.bodySmall),
+                                  title: Text(f.fileName,style: TextStyle(color: AppColors.white),),
+                                  subtitle: Text('${f.fileType} • ${(f.fileSize / 1024).toStringAsFixed(1)} KB', style: TextStyle(color: AppColors.white),),
+                                  trailing: Text(_fmt(f.uploadedAt), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.white)),
                                   onTap: () {
                                     // TODO: open f.fileUrl with url_launcher
                                   },

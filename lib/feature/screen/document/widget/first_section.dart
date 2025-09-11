@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:online_doc_savimex/feature/widget/color.dart';
 
 class DocumentHeader extends StatelessWidget {
   final String uploaderName;
@@ -21,6 +22,7 @@ class DocumentHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      color: AppColors.card,
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -28,16 +30,20 @@ class DocumentHeader extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('From: $uploaderName (Dp: $uploaderDepartmentName)',
-                style: Theme.of(context).textTheme.titleMedium),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.white)),
             const SizedBox(height: 4),
             Text('Posted: ${_fmt(postedAt)}',
-                style: Theme.of(context).textTheme.bodySmall),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.white)),
             if (canAct) ...[
               const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: AppColors.white
+                      ),
                       icon: const Icon(Icons.check),
                       onPressed: onApprove,
                       label: const Text('Approve'),
@@ -45,7 +51,11 @@ class DocumentHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: OutlinedButton.icon(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: AppColors.white,
+                      ),
                       icon: const Icon(Icons.close),
                       onPressed: onReject,
                       label: const Text('Reject'),

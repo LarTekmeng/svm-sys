@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+      <key>NSExceptionDomains</key>
+      <dict>
+        <key>192.168.31.77</key>
+        <dict>
+          <key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key><true/>
+        </dict>
+      </dict>
+    </dict>
 </dict>
 </plist>

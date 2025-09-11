@@ -159,8 +159,8 @@ class _HomescreenState extends State<Homescreen> with SingleTickerProviderStateM
                   unselectedLabelColor: Colors.white70,
                   dividerColor: Colors.transparent,
                   tabs: const [
-                    Tab(text: 'Uploaded by Me'),
-                    Tab(text: 'Assigned to Me'),
+                    Tab(text: 'INBOX'),
+                    Tab(text: 'UPLOAD'),
                   ],
                 ),
               ),
@@ -200,13 +200,13 @@ class _HomescreenState extends State<Homescreen> with SingleTickerProviderStateM
                       controller: _tab,
                       children: [
                         _DocsList(
-                          docs: _uploaded,
+                          docs: _assigned,
                           isEdit: _isEdit,
                           selectedDocIds: _selectedDocIds,
                           onChanged: _onCheckboxChanged,
                         ),
                         _DocsList(
-                          docs: _assigned,
+                          docs: _uploaded,
                           isEdit: _isEdit,
                           selectedDocIds: _selectedDocIds,
                           onChanged: _onCheckboxChanged,
@@ -290,9 +290,9 @@ class _DocsList extends StatelessWidget {
                 padding: EdgeInsets.only(left: isEdit ? 5.0 : 0.0),
                 child: DocumentItem(
                   title: doc.title,
-                  // You can map real status here if available:
                   status: (doc.status),
                   desc: doc.description as String, documentId: doc.id as int,
+                  isReadOnly: doc.inboxType == 'SHARED',
                 ),
               ),
             ),

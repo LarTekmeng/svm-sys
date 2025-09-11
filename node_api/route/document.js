@@ -69,5 +69,6 @@ router.post(
 // ---- Files helpers ----
 router.get('/:documentId/files', auth, ctrl.listFiles);
 router.delete('/:documentId/files/:fileId', auth, ctrl.removeFile);
+router.get('/api/documents/shared', auth, ctrl.listShared);
 
 module.exports = router;

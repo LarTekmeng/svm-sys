@@ -27,28 +27,41 @@ exports.createWithFiles = async (req, res) => {
 
   try {
     const result = await db.tx(async (t) => {
-      // (1) insert document
-      const { id: documentId } = await t.one(
-        `INSERT INTO documents (document_type_id, uploader_id, title, description)
-         VALUES ($1,$2,$3,$4) RETURNING id`,
-        [document_type_id, employeeId, String(title).trim(), String(description).trim()]
-      );
-
-      // (2) create steps (direct vs step-by-step)
+      // (0) read settings & flows FIRST
       const setting = await t.oneOrNone(
-        `SELECT forward_mode FROM document_type_settings WHERE document_type_id=$1`,
+        `SELECT action, forward_mode
+           FROM document_type_settings
+          WHERE document_type_id = $1`,
         [document_type_id]
       );
+
       const flows = await t.any(
         `SELECT sequence, department_id, employee_id, step_action
            FROM document_type_flows
-          WHERE document_type_id=$1
+          WHERE document_type_id = $1
           ORDER BY sequence ASC`,
         [document_type_id]
       );
-      const stepsToInsert = (setting?.forward_mode === 'Step by Step')
-        ? (flows.length ? [flows[0]] : [])
-        : flows;
+
+      // Ask-for-Permission => PENDING, Read-Only => NULL
+      const initialStatus = (setting?.action === 'Ask for Permission') ? 'PENDING' : null;
+
+      // (1) single INSERT with status
+      const { id: documentId } = await t.one(
+        `INSERT INTO documents (document_type_id, uploader_id, title, description, status)
+         VALUES ($1,$2,$3,$4,$5)
+         RETURNING id`,
+        [document_type_id, employeeId, String(title).trim(), String(description).trim(), initialStatus]
+      );
+
+      // (2) create steps (direct vs step-by-step)
+      const stepsToInsert =
+        (setting?.action === 'Read-Only')
+          ? []
+          : (setting?.forward_mode === 'Step by Step'
+              ? (flows.length ? [flows[0]] : [])
+              : flows);
+
       for (const f of stepsToInsert) {
         await t.none(
           `INSERT INTO document_steps
@@ -58,10 +71,18 @@ exports.createWithFiles = async (req, res) => {
         );
       }
 
+      // (2b) Defensive: approval type with no flows -> auto-complete to avoid stuck docs
+      if (setting?.action === 'Ask for Permission' && flows.length === 0) {
+        await t.none(
+          `UPDATE documents SET status = 'COMPLETED', updated_at = now() WHERE id = $1`,
+          [documentId]
+        );
+      }
+
       // (3) upload files to R2 + insert file rows
       const savedFiles = [];
       for (const f of files) {
-        const ext = extOf(f.originalname);
+        const ext = extOf(f.originalname).toLowerCase();
         if (!ALLOWED_EXT.has(ext)) {
           throw new Error(`File type not allowed: ${ext || '(no extension)'}`);
         }
@@ -84,7 +105,12 @@ exports.createWithFiles = async (req, res) => {
       }
 
       return {
-        document: { id: documentId, document_type_id, title: String(title).trim(), description: String(description).trim() },
+        document: {
+          id: documentId,
+          document_type_id,
+          title: String(title).trim(),
+          description: String(description).trim(),
+        },
         files: savedFiles,
       };
     });
@@ -94,15 +120,16 @@ exports.createWithFiles = async (req, res) => {
     // best-effort cleanup of uploaded objects if TX failed
     if (uploadedKeys.length) {
       const { deleteKey } = storage;
-      await Promise.all(uploadedKeys.map(k => deleteKey(k)));
+      await Promise.all(uploadedKeys.map((k) => deleteKey(k)));
     }
     console.error('Error creating document with files:', e);
-    const hint = (e.Code === 'AccessDenied')
+    const hint = (e.code || e.Code) === 'AccessDenied'
       ? 'R2 access denied — check S3 access key scope, bucket name, endpoint, and forcePathStyle'
-      : e.message;
+      : (e.message || String(e));
     return res.status(500).json({ error: 'Error creating document with files', details: hint });
   }
 };
+
 
 
 // --- LIST FILES ---
@@ -414,6 +441,57 @@ exports.addFilesToExisting = async (req, res) => {
   } catch (e) {
     console.error(e);
     return res.status(400).json({ error: e.message || 'Upload failed' });
+  }
+};
+
+exports.listShared = async (req, res) => {
+  const me = req.employee?.id;
+  if (!me) return res.status(401).json({ error: 'Not authenticated' });
+
+  try {
+    const rows = await db.any(
+      `
+      SELECT
+        d.id,
+        d.document_type_id,
+        dt.title AS document_type_title,
+        d.title,
+        d.description,
+        d.status,
+        d.created_at,
+        d.updated_at,
+        u.name AS uploader_name
+      FROM documents d
+      JOIN document_type_settings s
+        ON s.document_type_id = d.document_type_id
+      JOIN document_type_flows f
+        ON f.document_type_id = d.document_type_id
+      JOIN document_types dt
+        ON dt.id = d.document_type_id
+      LEFT JOIN employee u
+        ON u.id = d.uploader_id
+      WHERE s.action = 'Read-Only'
+        AND f.employee_id = $1
+      ORDER BY d.created_at DESC
+      `,
+      [me]
+    );
+
+    // (Optional) include a files preview count for each doc
+    // const fileCounts = await db.any(
+    //   `SELECT document_id, COUNT(*) AS cnt
+    //      FROM document_files
+    //     WHERE document_id = ANY($1)
+    //     GROUP BY document_id`,
+    //   [rows.map(r => r.id)]
+    // );
+    // const countMap = Object.fromEntries(fileCounts.map(f => [f.document_id, Number(f.cnt)]));
+    // rows.forEach(r => r.file_count = countMap[r.id] || 0);
+
+    return res.json({ items: rows });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: 'Failed to list shared documents' });
   }
 };
 //

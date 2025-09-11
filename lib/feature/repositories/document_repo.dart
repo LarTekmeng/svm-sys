@@ -252,4 +252,33 @@ class DocumentRepository {
       throw Exception('Decision failed: ${res.statusCode} ${res.body}');
     }
   }
+
+  Future<List<Document>> listSharedDocuments({int? documentTypeId}) async {
+    final base = Uri.parse('$baseUrl/api/documents/shared');
+    final uri = (documentTypeId == null)
+        ? base
+        : base.replace(queryParameters: {
+      'document_type_id': documentTypeId.toString(),
+    });
+
+    final res = await _getWithRetry(uri);
+    if (res.statusCode != 200) {
+      final decoded = _tryDecode(res.body);
+      throw Exception(decoded['error'] ??
+          'Failed to load shared documents (status ${res.statusCode})');
+    }
+
+    final decoded = _tryDecode(res.body);
+
+    // Accept either { items: [...] } or a raw array
+    final listDyn = (decoded['items'] ?? decoded['raw'] ?? []) as List<dynamic>;
+    return listDyn
+        .cast<Map<String, dynamic>>()
+        .map(Document.fromJson)
+        .toList();
+  }
+
+  Future<List<Document>> listSharedByType(int documentTypeId) {
+    return listSharedDocuments(documentTypeId: documentTypeId);
+  }
 }

@@ -40,26 +40,32 @@ class Document {
   final String title;
   final int? doctypeId;                 // maps from document_type_id
   final String? description;
-  final String status;                  // defaults to 'PENDING' if absent
+  final String? status;                  // defaults to 'PENDING' if absent
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? documentTypeTitle;      // handles document_type_title or document_type
+  final String? inboxType;
+  final bool? requiresAction;
   final int? sequence;                  // present in "assigned to me" rows
   final String? stepStatus;             // present in "assigned to me" rows
-  final String? stepAction;             // present in "assigned to me" rows
+  final String? stepAction;// present in "assigned to me" rows
+  final String? uploaderName;
 
   const Document({
     this.id,
     required this.title,
     this.doctypeId,
     this.description,
-    required this.status,
+    this.status,
     required this.createdAt,
     required this.updatedAt,
     this.documentTypeTitle,
+    this.inboxType,
+    this.requiresAction,
     this.sequence,
     this.stepStatus,
     this.stepAction,
+    this.uploaderName
   });
 
   /// Robust factory that:
@@ -67,7 +73,7 @@ class Document {
   /// - accepts multiple key variants
   /// - provides safe defaults
   factory Document.fromJson(Map<String, dynamic> json) {
-    final created = _parseDate(json['created_at'] ?? json['createed_at']);
+    final created = _parseDate(json['created_at'] ?? json['created_at']);
     final updated = _parseDate(json['updated_at']);
 
     return Document(
@@ -75,13 +81,16 @@ class Document {
       title: (json['title'] ?? '') as String,
       doctypeId: (json['document_type_id'] == null) ? null : asInt(json['document_type_id']),
       description: json['description'] as String?,
-      status: (json['status'] as String?)?.toUpperCase() ?? 'PENDING',
+      status: (json['status'] as String?)?.toUpperCase(),
       createdAt: created ?? DateTime.fromMillisecondsSinceEpoch(0),
       updatedAt: updated ?? DateTime.fromMillisecondsSinceEpoch(0),
       documentTypeTitle: (json['document_type_title'] ?? json['document_type']) as String?,
+      inboxType: json['inbox_type'] as String?,
+      requiresAction: json['requires_action'] as bool?,
       sequence: (json['sequence'] == null) ? null : asInt(json['sequence']),
       stepAction: json['step_action'] as String?,
       stepStatus: json['step_status'] as String?,
+      uploaderName: json['uploader_name'] as String?,
     );
   }
 
@@ -90,13 +99,14 @@ class Document {
     'title': title,
     if (doctypeId != null) 'document_type_id': doctypeId,
     'description': description,
-    'status': status,
+    if(status != null) 'status' : status,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
     'document_type_title': documentTypeTitle,
     'sequence': sequence,
     'step_action': stepAction,
     'step_status': stepStatus,
+    'uploader_name' : uploaderName,
   };
 
   Document copyWith({
@@ -111,6 +121,7 @@ class Document {
     int? sequence,
     String? stepStatus,
     String? stepAction,
+    String? uploaderName,
   }) {
     return Document(
       id: id ?? this.id,
@@ -124,6 +135,7 @@ class Document {
       sequence: sequence ?? this.sequence,
       stepStatus: stepStatus ?? this.stepStatus,
       stepAction: stepAction ?? this.stepAction,
+      uploaderName: uploaderName ?? this.uploaderName,
     );
   }
 

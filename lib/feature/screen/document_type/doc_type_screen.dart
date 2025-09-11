@@ -1,5 +1,4 @@
 import 'package:online_doc_savimex/app_import.dart';
-import 'package:online_doc_savimex/feature/repositories/doctype_repo.dart';
 
 class DocumentTypeScreen extends StatefulWidget {
   final String employeeID;

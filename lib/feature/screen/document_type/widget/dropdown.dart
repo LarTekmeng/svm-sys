@@ -1,5 +1,6 @@
 // lib/feature/screen/Doc_type/dropdown.dart
 import 'package:flutter/material.dart';
+import 'package:online_doc_savimex/feature/widget/color.dart';
 
 /// A parameterized dropdown block for selecting department, then employee & action.
 /// - deptItems & empItems are lists of **IDs** (e.g. ['all','3','5',…])
@@ -28,13 +29,21 @@ Widget buildFlowRow({
     children: [
       // ─── Department (full width) ──────────────────────────────────────────
       DropdownButtonFormField<String>(
-        decoration: const InputDecoration(
-          labelText: 'Department',
-          border: OutlineInputBorder(),
+        decoration: InputDecoration(
+          fillColor: AppColors.white,
+          filled: true,
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: AppColors.black38, width: 1)
+          ),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: AppColors.black38, width: 1)
+          ),
           isDense: true,
         ),
         value: selectedDept,
-        hint: const Text('Department'),
+        hint: Text('Department'),
         items: deptItems.map((deptId) {
           final label = deptId == 'all'
               ? 'All Departments'
@@ -55,9 +64,17 @@ Widget buildFlowRow({
           // Employee
           Expanded(
             child: DropdownButtonFormField<String>(
-              decoration: const InputDecoration(
-                labelText: 'Employee',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: AppColors.white,
+                enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: AppColors.black38, width: 1)
+                ),
+                focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: AppColors.black38, width: 1)
+                ),
                 isDense: true,
               ),
               value: selectedEmp,
@@ -80,9 +97,17 @@ Widget buildFlowRow({
           // Action
           Expanded(
             child: DropdownButtonFormField<String>(
-              decoration: const InputDecoration(
-                labelText: 'Action',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: AppColors.white,
+                enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: AppColors.black38, width: 1)
+                ),
+                focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: AppColors.black38, width: 1)
+                ),
                 isDense: true,
               ),
               value: selectedAction,

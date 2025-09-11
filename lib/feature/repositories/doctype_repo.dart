@@ -180,7 +180,7 @@ class DoctypeRepository {
 
     final resp = await _putJsonWithRetry(uri, payload);
     if (resp.statusCode != 200) {
-      throw Exception('Failed to set flow (status ${resp.statusCode}): ${resp.body}');
+       throw Exception('Failed to set flow (status ${resp.statusCode}): ${resp.body}');
     }
   }
 

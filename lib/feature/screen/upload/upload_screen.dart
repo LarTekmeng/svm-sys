@@ -2,10 +2,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:online_doc_savimex/app_import.dart';
-
-import '../../bloc/uploadBLoC/upload_bloc.dart';
-import '../../bloc/uploadBLoC/upload_event.dart';
-import '../../bloc/uploadBLoC/upload_state.dart';
+import 'package:online_doc_savimex/feature/widget/color.dart';
 
 class UploadScreen extends StatefulWidget {
   final String employeeID;
@@ -177,166 +174,185 @@ class _UploadScreenState extends State<UploadScreen> {
 
   Widget _buildScaffold(BuildContext context) {
     final ready = !_submitting && !_loadingTypes;
-
+    final textTitle = Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.white, fontWeight: FontWeight.bold);
+    final textSubTitle = Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.white);
     return Scaffold(
       appBar: AppBar(
-        leading: const BackButton(color: Colors.black),
-        backgroundColor: Colors.white,
+        leading: const BackButton(),
+        backgroundColor: AppColors.background,
+        foregroundColor: AppColors.white,
         elevation: 0,
-        title: const Text('Document form', style: TextStyle(color: Colors.black)),
+        title: Text('Document form', style: textTitle),
         centerTitle: true,
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: AbsorbPointer(
-            absorbing: !ready,
-            child: Opacity(
-              opacity: ready ? 1 : 0.6,
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const LabelWithAsterisk('Document title'),
-                    TextFormField(
-                      controller: _titleController,
-                      decoration: const InputDecoration(
-                        hintText: 'document title',
-                        border: OutlineInputBorder(),
+      body: Container(
+        color: AppColors.background,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: AbsorbPointer(
+              absorbing: !ready,
+              child: Opacity(
+                opacity: ready ? 1 : 0.6,
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Document title:', style: textSubTitle,),
+                      TextFormField(
+                        controller: _titleController,
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: AppColors.white,
+                          hintText: 'title',
+                          hintStyle: TextStyle(color: AppColors.black26),
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: AppColors.black38, width: 1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: AppColors.black38, width: 1),
+                            borderRadius: BorderRadius.circular(8),
+                          )
+                        ),
+                        onTapOutside: (event){FocusScope.of(context).unfocus();},
+                        validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Title is required' : null,
                       ),
-                      validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Title is required' : null,
-                    ),
-                    const SizedBox(height: 16),
-
-                    const LabelWithAsterisk('Document type'),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<DocumentType>(
-                            isExpanded: true,
-                            value: _selectedType,
-                            decoration: const InputDecoration(
-                              hintText: 'choose document type',
-                              border: OutlineInputBorder(),
+                      const SizedBox(height: 10),
+                      Text('Document type:', style: textSubTitle,),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<DocumentType>(
+                              isExpanded: true,
+                              value: _selectedType,
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: AppColors.white,
+                                hintText: 'choose type',
+                                hintStyle: TextStyle(color: AppColors.black26),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(color: AppColors.black38, width: 1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: AppColors.black38, width: 1),
+                                )
+                              ),
+                              items: _types
+                                  .map((dt) => DropdownMenuItem(
+                                value: dt,
+                                child: Text(dt.docTitle),
+                              ))
+                                  .toList(),
+                              onChanged: (dt) => setState(() => _selectedType = dt),
+                              validator: (_) =>
+                              _selectedType == null ? 'Please select a type' : null,
                             ),
-                            items: _types
-                                .map((dt) => DropdownMenuItem(
-                              value: dt,
-                              child: Text(dt.docTitle),
-                            ))
-                                .toList(),
-                            onChanged: (dt) => setState(() => _selectedType = dt),
-                            validator: (_) =>
-                            _selectedType == null ? 'Please select a type' : null,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add, color: Colors.blue),
+                            onPressed: () {
+                              // optional: open create-type screen
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+
+                      Text('Description (optional):',style: textSubTitle),
+                      TextFormField(
+                        controller: _descController,
+                        maxLines: 4,
+                        decoration: InputDecoration(
+                          hintText: 'type here...',
+                          hintStyle: TextStyle(color: AppColors.black26),
+                          filled: true,
+                          fillColor: AppColors.white,
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: AppColors.black38,width: 1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: AppColors.black38,width: 1),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.add, color: Colors.blue),
-                          onPressed: () {
-                            // optional: open create-type screen
-                          },
+                        onTapOutside: (event){FocusScope.of(context).unfocus();},
+                      ),
+                      const SizedBox(height: 10),
+                      Text('Files here:(image, pdf, word, excel...)', style: textSubTitle,),
+                      // file picker trigger
+                      UploadBlock(onTapPickFiles: _pickFiles),
+                      if (_files.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: List.generate(_files.length, (i) {
+                            final f = _files[i];
+                            return InputChip(
+                              label: Text(
+                                f.name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onDeleted: () => _removeFileAt(i),
+                            );
+                          }),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 16),
 
-                    const Text('Description (optional):'),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _descController,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        hintText: 'type here...',
-                        border: OutlineInputBorder(),
+                      const SizedBox(height: 16),
+                      Text('Schedule date', style: textSubTitle,),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _dateController,
+                        readOnly: true,
+                        onTap: _pickDate,
+                        decoration: InputDecoration(
+                          hintText: 'dd/mm/yyyy',
+                          filled: true,
+                          fillColor: AppColors.white,
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: AppColors.black38, width: 1)
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: AppColors.black38, width: 1),
+                            borderRadius: BorderRadius.circular(8)
+                          ),
+                          suffixIcon: Icon(Icons.calendar_today),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    const LabelWithAsterisk(
-                        'Upload your file: (image, pdf, word, excel...)'),
-                    const SizedBox(height: 8),
-
-                    // file picker trigger
-                    UploadBlock(onTapPickFiles: _pickFiles),
-
-                    if (_files.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: List.generate(_files.length, (i) {
-                          final f = _files[i];
-                          return InputChip(
-                            label: Text(
-                              f.name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            onDeleted: () => _removeFileAt(i),
-                          );
-                        }),
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                        ),
+                      const SizedBox(height: 24),
+                      Center(
+                        child: FilledButton(
+                          onPressed: ready ? _onSubmit : null,
+                          child: _submitting
+                              ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                              : const Text('Submit'),
+                        ),
                       ),
                     ],
-
-                    const SizedBox(height: 16),
-                    const Text('Schedule date'),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _dateController,
-                      readOnly: true,
-                      onTap: _pickDate,
-                      decoration: const InputDecoration(
-                        hintText: 'dd/mm/yyyy',
-                        border: OutlineInputBorder(),
-                        suffixIcon: Icon(Icons.calendar_today),
-                      ),
-                    ),
-
-                    if (_error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Text(_error!, style: const TextStyle(color: Colors.red)),
-                      ),
-
-                    const SizedBox(height: 24),
-                    Center(
-                      child: FilledButton(
-                        onPressed: ready ? _onSubmit : null,
-                        child: _submitting
-                            ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                            : const Text('Submit'),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class LabelWithAsterisk extends StatelessWidget {
-  final String label;
-  const LabelWithAsterisk(this.label, {super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return RichText(
-      text: const TextSpan(
-        style: TextStyle(color: Colors.black, fontSize: 16),
-        children: [
-          // Leading text will be injected by outer TextSpan
-        ],
-      ),
-      textScaler: MediaQuery.textScalerOf(context),
     );
   }
 }
