@@ -1,11 +1,21 @@
+
 import 'package:dotted_border/dotted_border.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dropzone/flutter_dropzone.dart';
 
 class UploadBlock extends StatefulWidget {
   final VoidCallback? onRemove;
   final VoidCallback? onTapPickFiles;
+  final void Function(List<PlatformFile> files)? onFilesDropped;
 
-  const UploadBlock({super.key, this.onRemove, this.onTapPickFiles});
+  const UploadBlock({
+    super.key,
+    this.onRemove,
+    this.onTapPickFiles,
+    this.onFilesDropped,
+  });
 
   @override
   State<UploadBlock> createState() => _UploadBlockState();
@@ -14,7 +24,10 @@ class UploadBlock extends StatefulWidget {
 class _UploadBlockState extends State<UploadBlock> {
   bool showFileDescription = false;
   final TextEditingController fileDescriptionController =
-  TextEditingController();
+      TextEditingController();
+
+  DropzoneViewController? _dz;
+  bool _hovering = false;
 
   @override
   void dispose() {
@@ -22,75 +35,68 @@ class _UploadBlockState extends State<UploadBlock> {
     super.dispose();
   }
 
+  Future<void> _handleDrop(dynamic ev) async {
+    if (_dz == null) return;
+    final name = await _dz!.getFilename(ev);
+    final size = await _dz!.getFileSize(ev);
+    final bytes = await _dz!.getFileData(ev);
+
+    final pf = PlatformFile(name: name, size: size, bytes: bytes);
+
+    widget.onFilesDropped?.call([pf]);
+    setState(() {
+      _hovering = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        InkWell(
-          onTap: widget.onTapPickFiles, // <-- trigger picker
-          child: DottedBorder(
-            borderType: BorderType.RRect,
-            radius: const Radius.circular(8),
-            dashPattern: const [6, 3],
-            color: Colors.black45,
-            strokeWidth: 2,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              color: Colors.grey[100],
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.cloud_upload_outlined, size: 40),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Click to browse file',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const Text(
-                    'Drag and drop file here',
-                    style: TextStyle(color: Colors.black54),
-                  ),
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        showFileDescription = !showFileDescription;
-                      });
-                    },
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          showFileDescription
-                              ? Icons.undo
-                              : Icons.add_circle_outline,
-                          color: Colors.blue,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          showFileDescription ? 'Undo' : 'Add Description',
-                          style: const TextStyle(color: Colors.blue),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (showFileDescription)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: TextFormField(
-                        controller: fileDescriptionController,
-                        decoration: const InputDecoration(
-                          hintText: 'Enter file description...',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                ],
+    final dnd = DottedBorder(
+      color: _hovering ? Colors.blue : Colors.black26,
+      strokeWidth: 1.2,
+      dashPattern: [6, 4],
+      borderType: BorderType.RRect,
+      radius: Radius.circular(12),
+      child: InkWell(
+        onTap: widget.onTapPickFiles,
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_upload_outlined, size: 40),
+              SizedBox(height: 8),
+              Text(
+                'Click to browse files',
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-            ),
+              Text(
+                'or drag & drop here',
+                style: TextStyle(color: Colors.black54),
+              ),
+              SizedBox(height: 8),
+            ],
           ),
         ),
+      ),
+    );
+    return Stack(
+      children: [
+        dnd,
+        if(kIsWeb)
+          Positioned.fill(child: IgnorePointer(
+            ignoring: false,
+            child: DropzoneView(
+              onCreated: (c) => _dz = c,
+              operation: DragOperation.copy,
+              cursor: CursorType.grab,
+              onHover: () => setState(() => _hovering = true),
+              onLeave: () => setState(() => _hovering = false),
+              onDropFile: _handleDrop,
+            ),
+          )),
         if (widget.onRemove != null)
           Positioned(
             right: 0,

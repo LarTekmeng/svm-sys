@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:online_doc_savimex/app_import.dart';
 import 'package:online_doc_savimex/feature/widget/color.dart';
+import 'package:path/path.dart' as p;
 
 class UploadScreen extends StatefulWidget {
   final String employeeID;
@@ -18,7 +20,8 @@ class _UploadScreenState extends State<UploadScreen> {
   DateTime? selectedDate;
   final TextEditingController _dateController = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _descController  = TextEditingController();
+  final TextEditingController _descController = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
 
   List<DocumentType> _types = [];
   DocumentType? _selectedType;
@@ -27,7 +30,7 @@ class _UploadScreenState extends State<UploadScreen> {
   final List<PlatformFile> _files = [];
 
   bool _loadingTypes = true;
-  bool _submitting   = false;     // kept for button disable/opacity only
+  bool _submitting = false; // kept for button disable/opacity only
   String? _error;
 
   // repos
@@ -40,7 +43,7 @@ class _UploadScreenState extends State<UploadScreen> {
   void initState() {
     super.initState();
     _doctypeRepo = context.read<DoctypeRepository>();
-    _authRepo    = context.read<AuthRepository>();
+    _authRepo = context.read<AuthRepository>();
     _initRepoAndLoadTypes();
   }
 
@@ -52,7 +55,10 @@ class _UploadScreenState extends State<UploadScreen> {
   }
 
   Future<void> _loadDoctypes() async {
-    setState(() { _loadingTypes = true; _error = null; });
+    setState(() {
+      _loadingTypes = true;
+      _error = null;
+    });
     try {
       final types = await _doctypeRepo.getDoctypeById(widget.employeeID);
       setState(() {
@@ -61,9 +67,9 @@ class _UploadScreenState extends State<UploadScreen> {
       });
     } catch (e) {
       setState(() => _error = 'Failed to load types: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load types: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to load types: $e')));
     } finally {
       setState(() => _loadingTypes = false);
     }
@@ -117,10 +123,11 @@ class _UploadScreenState extends State<UploadScreen> {
     }
 
     // Gather files for the event
-    final files = _files
-        .where((pf) => pf.path != null)
-        .map((pf) => File(pf.path!))
-        .toList();
+    final files =
+        _files
+            .where((pf) => pf.path != null)
+            .map((pf) => File(pf.path!))
+            .toList();
 
     // Dispatch to UploadBloc instead of calling repo directly
     context.read<UploadBloc>().add(
@@ -133,7 +140,10 @@ class _UploadScreenState extends State<UploadScreen> {
     );
 
     // Flip local “submitting” just for disabling the button/opacity (UI unchanged)
-    setState(() { _submitting = true; _error = null; });
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
   }
 
   @override
@@ -142,6 +152,97 @@ class _UploadScreenState extends State<UploadScreen> {
     _titleController.dispose();
     _descController.dispose();
     super.dispose();
+  }
+
+  void _openPicker() {
+    if (kIsWeb) {
+      _pickFiles();
+      return;
+    }
+    _showSourceSheet();
+  }
+
+  void _showSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder:
+          (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(Icons.photo_library_outlined),
+                  title: Text('Select from Photo/Gallery'),
+                  onTap: () async {
+                    Navigator.of(ctx).pop();
+                    await _pickFromGallery();
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.attach_file),
+                  title: Text('Select from Files'),
+                  onTap: () async {
+                    Navigator.of(ctx).pop;
+                    await _pickFiles();
+                  },
+                ),
+              ],
+            ),
+          ),
+    );
+  }
+
+  Future<void> _pickFromGallery() async {
+    try {
+      final imgs = await _imagePicker.pickMultiImage();
+      if (imgs.isEmpty) return;
+
+      final existingKeys = _files.map((f) => '${f.name}|${f.size}').toSet();
+      final toAdd = <PlatformFile>[];
+
+      for (final x in imgs) {
+        final name = p.basename(x.path);
+        int size;
+        Uint8List? bytes;
+
+        try {
+          size = await x.length();
+        } catch (_) {
+          final b = await x.readAsBytes();
+          size = b.lengthInBytes;
+          bytes = b;
+        }
+
+        final key = '$name|$size';
+        if (!existingKeys.contains(key)) {
+          toAdd.add(
+            PlatformFile(
+              name: name,
+              size: size,
+              path: x.path.isNotEmpty ? x.path : null,
+              bytes: bytes,
+            ),
+          );
+        }
+      }
+      if (toAdd.isNotEmpty) {
+        setState(() => _files.addAll(toAdd));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gallery pick failed: $e')));
+    }
+  }
+
+  void _onFilesDropped(List<PlatformFile> dropped) {
+    final existing = _files.map((f) => '${f.name}|${f.size}').toSet();
+    final unique = dropped.where((f) => !existing.contains('${f.name}|${f.size}'));
+    setState(() => _files.addAll(unique));
   }
 
   @override
@@ -161,9 +262,16 @@ class _UploadScreenState extends State<UploadScreen> {
           if (mounted) Navigator.of(context).pop(true);
         } else if (state.status == UploadStatus.failure) {
           if (mounted) {
-            setState(() { _submitting = false; _error = state.error; });
+            setState(() {
+              _submitting = false;
+              _error = state.error;
+            });
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Upload failed: ${state.error ?? 'Unknown error'}')),
+              SnackBar(
+                content: Text(
+                  'Upload failed: ${state.error ?? 'Unknown error'}',
+                ),
+              ),
             );
           }
         }
@@ -174,8 +282,13 @@ class _UploadScreenState extends State<UploadScreen> {
 
   Widget _buildScaffold(BuildContext context) {
     final ready = !_submitting && !_loadingTypes;
-    final textTitle = Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.white, fontWeight: FontWeight.bold);
-    final textSubTitle = Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.white);
+    final textTitle = Theme.of(context).textTheme.titleLarge?.copyWith(
+      color: AppColors.white,
+      fontWeight: FontWeight.bold,
+    );
+    final textSubTitle = Theme.of(
+      context,
+    ).textTheme.titleMedium?.copyWith(color: AppColors.white);
     return Scaffold(
       appBar: AppBar(
         leading: const BackButton(),
@@ -199,7 +312,7 @@ class _UploadScreenState extends State<UploadScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Document title:', style: textSubTitle,),
+                      Text('Document title:', style: textSubTitle),
                       TextFormField(
                         controller: _titleController,
                         decoration: InputDecoration(
@@ -208,49 +321,73 @@ class _UploadScreenState extends State<UploadScreen> {
                           hintText: 'title',
                           hintStyle: TextStyle(color: AppColors.black26),
                           enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: AppColors.black38, width: 1),
+                            borderSide: BorderSide(
+                              color: AppColors.black38,
+                              width: 1,
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: AppColors.black38, width: 1),
+                            borderSide: BorderSide(
+                              color: AppColors.black38,
+                              width: 1,
+                            ),
                             borderRadius: BorderRadius.circular(8),
-                          )
+                          ),
                         ),
-                        onTapOutside: (event){FocusScope.of(context).unfocus();},
-                        validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Title is required' : null,
+                        onTapOutside: (event) {
+                          FocusScope.of(context).unfocus();
+                        },
+                        validator:
+                            (v) =>
+                                (v == null || v.trim().isEmpty)
+                                    ? 'Title is required'
+                                    : null,
                       ),
                       const SizedBox(height: 10),
-                      Text('Document type:', style: textSubTitle,),
+                      Text('Document type:', style: textSubTitle),
                       Row(
                         children: [
                           Expanded(
                             child: DropdownButtonFormField<DocumentType>(
                               isExpanded: true,
-                              value: _selectedType,
+                              initialValue: _selectedType,
                               decoration: InputDecoration(
                                 filled: true,
                                 fillColor: AppColors.white,
                                 hintText: 'choose type',
                                 hintStyle: TextStyle(color: AppColors.black26),
                                 enabledBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(color: AppColors.black38, width: 1),
+                                  borderSide: BorderSide(
+                                    color: AppColors.black38,
+                                    width: 1,
+                                  ),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: AppColors.black38, width: 1),
-                                )
+                                  borderSide: BorderSide(
+                                    color: AppColors.black38,
+                                    width: 1,
+                                  ),
+                                ),
                               ),
-                              items: _types
-                                  .map((dt) => DropdownMenuItem(
-                                value: dt,
-                                child: Text(dt.docTitle),
-                              ))
-                                  .toList(),
-                              onChanged: (dt) => setState(() => _selectedType = dt),
-                              validator: (_) =>
-                              _selectedType == null ? 'Please select a type' : null,
+                              items:
+                                  _types
+                                      .map(
+                                        (dt) => DropdownMenuItem(
+                                          value: dt,
+                                          child: Text(dt.docTitle),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged:
+                                  (dt) => setState(() => _selectedType = dt),
+                              validator:
+                                  (_) =>
+                                      _selectedType == null
+                                          ? 'Please select a type'
+                                          : null,
                             ),
                           ),
                           IconButton(
@@ -263,7 +400,7 @@ class _UploadScreenState extends State<UploadScreen> {
                       ),
                       const SizedBox(height: 10),
 
-                      Text('Description (optional):',style: textSubTitle),
+                      Text('Description (optional):', style: textSubTitle),
                       TextFormField(
                         controller: _descController,
                         maxLines: 4,
@@ -273,20 +410,31 @@ class _UploadScreenState extends State<UploadScreen> {
                           filled: true,
                           fillColor: AppColors.white,
                           enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: AppColors.black38,width: 1),
+                            borderSide: BorderSide(
+                              color: AppColors.black38,
+                              width: 1,
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: AppColors.black38,width: 1),
+                            borderSide: BorderSide(
+                              color: AppColors.black38,
+                              width: 1,
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        onTapOutside: (event){FocusScope.of(context).unfocus();},
+                        onTapOutside: (event) {
+                          FocusScope.of(context).unfocus();
+                        },
                       ),
                       const SizedBox(height: 10),
-                      Text('Files here:(image, pdf, word, excel...)', style: textSubTitle,),
+                      Text(
+                        'Files here:(image, pdf, word, excel...)',
+                        style: textSubTitle,
+                      ),
                       // file picker trigger
-                      UploadBlock(onTapPickFiles: _pickFiles),
+                      UploadBlock(onTapPickFiles: _openPicker, onFilesDropped: _onFilesDropped,),
                       if (_files.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         Wrap(
@@ -306,7 +454,7 @@ class _UploadScreenState extends State<UploadScreen> {
                       ],
 
                       const SizedBox(height: 16),
-                      Text('Schedule date', style: textSubTitle,),
+                      Text('Schedule date', style: textSubTitle),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _dateController,
@@ -318,11 +466,17 @@ class _UploadScreenState extends State<UploadScreen> {
                           fillColor: AppColors.white,
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: AppColors.black38, width: 1)
+                            borderSide: BorderSide(
+                              color: AppColors.black38,
+                              width: 1,
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: AppColors.black38, width: 1),
-                            borderRadius: BorderRadius.circular(8)
+                            borderSide: BorderSide(
+                              color: AppColors.black38,
+                              width: 1,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           suffixIcon: Icon(Icons.calendar_today),
                         ),
@@ -330,19 +484,25 @@ class _UploadScreenState extends State<UploadScreen> {
                       if (_error != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 12),
-                          child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                          child: Text(
+                            _error!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
                         ),
                       const SizedBox(height: 24),
                       Center(
                         child: FilledButton(
                           onPressed: ready ? _onSubmit : null,
-                          child: _submitting
-                              ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                              : const Text('Submit'),
+                          child:
+                              _submitting
+                                  ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : const Text('Submit'),
                         ),
                       ),
                     ],

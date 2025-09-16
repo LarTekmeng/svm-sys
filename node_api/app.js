@@ -27,3 +27,7 @@ const HOST = process.env.APP_HOST || '0.0.0.0'; // <— NEW
 app.listen(PORT, HOST, () => {
   console.log(`🚀 API running on http://${HOST}:${PORT}`);
 });
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ ok: true, ts: Date.now() });
+});
