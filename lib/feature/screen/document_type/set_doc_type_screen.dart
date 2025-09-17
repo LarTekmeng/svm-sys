@@ -53,7 +53,7 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
         'all',
         ...emps
             .where((e) => e.departmentID.toString() == key)
-            .map((e) => e.id.toString())
+            .map((e) => e.id.toString()),
       ];
     }
 
@@ -109,7 +109,10 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
     // Build flows from current UI state.
     final flows = <Map<String, dynamic>>[];
     for (var i = 0; i < selectedDepts.length; i++) {
-      final step = (selectedAction == 'Read-Only') ? 'READ-ONLY' : (selectedActions[i] ?? 'APPROVAL');
+      final step =
+          (selectedAction == 'Read-Only')
+              ? 'READ-ONLY'
+              : (selectedActions[i] ?? 'APPROVAL');
       flows.add({
         'sequence': i + 1,
         'department_id': selectedDepts[i] ?? 'all',
@@ -123,8 +126,8 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
     await _repo.setDocTypeFlow(
       widget.documentTypeId,
       selectedAction, // 'Read-Only' or 'Ask for Permission'
-      _fm,            // 'Direct' or 'Step by Step'
-      flows,          // preserved/edited flows
+      _fm, // 'Direct' or 'Step by Step'
+      flows, // preserved/edited flows
     );
 
     if (mounted) Navigator.pop(context, true);
@@ -217,12 +220,14 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
       color: AppColors.white,
       fontWeight: FontWeight.w500,
     );
-    final mediumText =
-    Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.white);
+    final mediumText = Theme.of(
+      context,
+    ).textTheme.titleMedium?.copyWith(color: AppColors.white);
 
     final stepDisabled = selectedAction == 'Read-Only';
     final readOnly = selectedAction == 'Read-Only';
-    final rowActionItems = readOnly ? const ['READ-ONLY'] : const ['APPROVAL', 'SIGNATURE'];
+    final rowActionItems =
+        readOnly ? const ['READ-ONLY'] : const ['APPROVAL', 'SIGNATURE'];
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -230,123 +235,181 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
         foregroundColor: AppColors.white,
         backgroundColor: AppColors.background,
       ),
-      body: (deptItems.length == 1)
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Action:', style: mediumText),
-            RadioListTile<String>(
-              title: Text('Read-Only', style: mediumText),
-              value: 'Read-Only',
-              groupValue: selectedAction,
-              onChanged: (v) => setState(() {
-                selectedAction = v!;
-                isStepExpanded = false;
-                isDirectExpanded = true;
-                selectedForwardMode = 'Direct';
-                if (selectedDepts.isEmpty) _ensureAtLeastRows(1);
-                _trimToRows(1);
-                if (selectedActions.isEmpty) _ensureAtLeastRows(1);
-                for (var i = 0; i < selectedActions.length; i++) {
-                  selectedActions[i] ??= 'READ-ONLY';
-                }
-              }),
-            ),
-            RadioListTile<String>(
-              title: Text('Ask for Permission', style: mediumText),
-              value: 'Ask for Permission',
-              groupValue: selectedAction,
-              onChanged: (v) => setState(() {
-                selectedAction = v!;
-                for (var i = 0; i < selectedActions.length; i++) {
-                  if (selectedActions[i] == 'READ-ONLY') selectedActions[i] = null;
-                }
-              }),
-            ),
-            const SizedBox(height: 16),
-            Text('Forward Mode:', style: mediumText),
-            Wrap(
-              spacing: 16,
-              children: [
-                ChoiceChip(
-                  label: const Text('Direct'),
-                  selected: isDirectExpanded,
-                  onSelected: (on) => setState(() {
-                    isDirectExpanded = on;
-                    isStepExpanded = false;
-                    selectedForwardMode = on ? 'Direct' : '';
-                    // Keep first row’s values; trim to 1 row.
-                    if (selectedDepts.isEmpty) _ensureAtLeastRows(1);
-                    _trimToRows(1);
-                  }),
-                ),
-                ChoiceChip(
-                  label: const Text('Step by Step'),
-                  selected: isStepExpanded,
-                  onSelected: stepDisabled
-                      ? null
-                      : (on) => setState(() {
-                    isStepExpanded = on;
-                    isDirectExpanded = false;
-                    selectedForwardMode = on ? 'Step by Step' : '';
-                    // Keep existing values. Ensure min 2 rows.
-                    _ensureAtLeastRows(2);
-                  }),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (isDirectExpanded || isStepExpanded) ...[
-              for (var i = 0; i < selectedDepts.length; i++) ...[
-                buildFlowRow(
-                  selectedDept: selectedDepts[i],
-                  selectedEmp: selectedEmps[i],
-                  selectedAction: selectedActions[i],
-                  deptItems: deptItems,
-                  empItems: (selectedDepts[i] != null &&
-                      selectedDepts[i] != 'all')
-                      ? (empMap[selectedDepts[i]] ?? allEmpItems)
-                      : allEmpItems,
-                  actionItems: rowActionItems,
-                  onDeptChanged: (v) => setState(() {
-                    selectedDepts[i] = v;
-                    selectedEmps[i] = null; // reset employee on dept change
-                  }),
-                  onEmpChanged: (v) => setState(() => selectedEmps[i] = v),
-                  onActionChanged: (v) =>
-                      setState(() => selectedActions[i] = v),
-                  deptNameMap: deptNameMap,
-                  empNameMap: empNameMap,
-                ),
-                if (selectedDepts.length > 1) const Divider(),
-                const SizedBox(height: 8),
-              ],
-              Row(
-                children: [
-                  if (selectedDepts.length > 1)
-                    TextButton(
-                      onPressed: _removeRow,
-                      child: const Text(
-                        'Undo',
-                        style: TextStyle(color: Colors.redAccent),
+      body:
+          (deptItems.length == 1)
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Action:', style: mediumText),
+                    // RadioListTile<String>(
+                    //   title: Text('Read-Only', style: mediumText),
+                    //   value: 'Read-Only',
+                    //   groupValue: selectedAction,
+                    //   onChanged:
+                    //       (v) => setState(() {
+                    //         selectedAction = v!;
+                    //         isStepExpanded = false;
+                    //         isDirectExpanded = true;
+                    //         selectedForwardMode = 'Direct';
+                    //         if (selectedDepts.isEmpty) _ensureAtLeastRows(1);
+                    //         _trimToRows(1);
+                    //         if (selectedActions.isEmpty) _ensureAtLeastRows(1);
+                    //         for (var i = 0; i < selectedActions.length; i++) {
+                    //           selectedActions[i] ??= 'READ-ONLY';
+                    //         }
+                    //       }),
+                    // ),
+                    // RadioListTile<String>(
+                    //   title: Text('Ask for Permission', style: mediumText),
+                    //   value: 'Ask for Permission',
+                    //   groupValue: selectedAction,
+                    //   onChanged:
+                    //       (v) => setState(() {
+                    //         selectedAction = v!;
+                    //         for (var i = 0; i < selectedActions.length; i++) {
+                    //           if (selectedActions[i] == 'READ-ONLY') {
+                    //             selectedActions[i] = null;
+                    //           }
+                    //         }
+                    //       }),
+                    // ),
+                    RadioGroup<String>(
+                      groupValue: selectedAction,
+                      onChanged:
+                          (String? v) => setState(() {
+                            selectedAction = v!;
+
+                            if (v == 'Read-Only') {
+                              isStepExpanded = false;
+                              isDirectExpanded = true;
+                              selectedForwardMode = 'Direct';
+
+                              if (selectedDepts.isEmpty) _ensureAtLeastRows(1);
+                              _trimToRows(1);
+
+                              if (selectedActions.isEmpty)
+                                _ensureAtLeastRows(1);
+                              for (var i = 0; i < selectedActions.length; i++) {
+                                selectedActions[i] ??= 'READ-ONLY';
+                              }
+                            } else if (v == 'Ask for Permission') {
+                              for (var i = 0; i < selectedActions.length; i++) {
+                                if (selectedActions[i] == 'READ-ONLY') {
+                                  selectedActions[i] = null;
+                                }
+                              }
+                            }
+                          }),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          RadioListTile<String>(
+                            value: 'Read-Only',
+                            title: Text('Read-Only', style: mediumText),
+                            // Note: no groupValue/onChanged here
+                          ),
+                          RadioListTile<String>(
+                            value: 'Ask for Permission',
+                            title: Text(
+                              'Ask for Permission',
+                              style: mediumText,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  TextButton(
-                    onPressed: _addRow,
-                    child: const Text(
-                      'Add more',
-                      style: TextStyle(color: Colors.blueAccent),
+                    const SizedBox(height: 16),
+                    Text('Forward Mode:', style: mediumText),
+                    Wrap(
+                      spacing: 16,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Direct'),
+                          selected: isDirectExpanded,
+                          onSelected:
+                              (on) => setState(() {
+                                isDirectExpanded = on;
+                                isStepExpanded = false;
+                                selectedForwardMode = on ? 'Direct' : '';
+                                // Keep first row’s values; trim to 1 row.
+                                if (selectedDepts.isEmpty)
+                                  _ensureAtLeastRows(1);
+                                _trimToRows(1);
+                              }),
+                        ),
+                        ChoiceChip(
+                          label: const Text('Step by Step'),
+                          selected: isStepExpanded,
+                          onSelected:
+                              stepDisabled
+                                  ? null
+                                  : (on) => setState(() {
+                                    isStepExpanded = on;
+                                    isDirectExpanded = false;
+                                    selectedForwardMode =
+                                        on ? 'Step by Step' : '';
+                                    // Keep existing values. Ensure min 2 rows.
+                                    _ensureAtLeastRows(2);
+                                  }),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    if (isDirectExpanded || isStepExpanded) ...[
+                      for (var i = 0; i < selectedDepts.length; i++) ...[
+                        buildFlowRow(
+                          selectedDept: selectedDepts[i],
+                          selectedEmp: selectedEmps[i],
+                          selectedAction: selectedActions[i],
+                          deptItems: deptItems,
+                          empItems:
+                              (selectedDepts[i] != null &&
+                                      selectedDepts[i] != 'all')
+                                  ? (empMap[selectedDepts[i]] ?? allEmpItems)
+                                  : allEmpItems,
+                          actionItems: rowActionItems,
+                          onDeptChanged:
+                              (v) => setState(() {
+                                selectedDepts[i] = v;
+                                selectedEmps[i] =
+                                    null; // reset employee on dept change
+                              }),
+                          onEmpChanged:
+                              (v) => setState(() => selectedEmps[i] = v),
+                          onActionChanged:
+                              (v) => setState(() => selectedActions[i] = v),
+                          deptNameMap: deptNameMap,
+                          empNameMap: empNameMap,
+                        ),
+                        if (selectedDepts.length > 1) const Divider(),
+                        const SizedBox(height: 8),
+                      ],
+                      Row(
+                        children: [
+                          if (selectedDepts.length > 1)
+                            TextButton(
+                              onPressed: _removeRow,
+                              child: const Text(
+                                'Undo',
+                                style: TextStyle(color: Colors.redAccent),
+                              ),
+                            ),
+                          TextButton(
+                            onPressed: _addRow,
+                            child: const Text(
+                              'Add more',
+                              style: TextStyle(color: Colors.blueAccent),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ],
-          ],
-        ),
-      ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(20),
         child: mainButton(_onConfirm, 'Confirm', Colors.green),
