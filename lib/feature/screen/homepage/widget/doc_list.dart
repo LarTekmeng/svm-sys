@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:online_doc_savimex/feature/screen/document/view_document.dart';
 
 class DocumentItem extends StatelessWidget {
   final int documentId;
@@ -7,6 +6,7 @@ class DocumentItem extends StatelessWidget {
   final String title;
   final String desc;
   final bool isReadOnly;  // hide chip when true
+  final VoidCallback? onTap; // NEW: let the parent decide navigation
 
   const DocumentItem({
     super.key,
@@ -15,11 +15,11 @@ class DocumentItem extends StatelessWidget {
     required this.title,
     required this.desc,
     this.isReadOnly = false,
+    this.onTap, // NEW
   });
 
   @override
   Widget build(BuildContext context) {
-    // normalize once
     final s = (status ?? '').trim();
     final sUpper = s.toUpperCase();
     final showStatus = !isReadOnly && s.isNotEmpty;
@@ -34,14 +34,7 @@ class DocumentItem extends StatelessWidget {
     }
 
     return InkWell(
-      onTap: () {
-        // If your widget in view_document.dart is named ViewDocument,
-        // change DocumentScreen(...) to ViewDocument(...).
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => DocumentScreen(documentId: documentId)),
-        );
-      },
+      onTap: onTap, // NEW
       child: Card(
         color: Colors.transparent,
         elevation: 0,
@@ -72,7 +65,7 @@ class DocumentItem extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      sUpper, // display normalized status
+                      sUpper,
                       style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),

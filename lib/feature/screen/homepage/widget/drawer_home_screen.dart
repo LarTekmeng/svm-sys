@@ -34,14 +34,10 @@ class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
 
   // Download to cache and pre-cache into memory for a snappy first paint
   void _prefetchAvatar(String url) {
-    // Delay until after first frame so `context` is safe for precacheImage
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
-        // Ensure the file exists in the disk cache (no network needed later)
         await AvatarCacheManager.instance.getSingleFile(url);
         if (!mounted) return;
-
-        // Warm up memory cache for immediate display the first time
         await precacheImage(
           CachedNetworkImageProvider(
             url,
@@ -50,7 +46,7 @@ class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
           context,
         );
       } catch (_) {
-        // Ignore prefetch failures; the UI will still fallback gracefully
+        // ignore
       }
     });
   }
@@ -71,19 +67,14 @@ class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
       child: FutureBuilder<Employee>(
         future: _employee,
         builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Text('Error loading profile: ${snapshot.error}'),
-            );
-          }
-          final employee = snapshot.data!;
+          // We ALWAYS render the header & tiles.
+          // If loading or error, we pass null so the header shows INVALID & broken image.
+          final Employee? employee = snapshot.data;
+
           return ListView(
             padding: EdgeInsets.zero,
             children: [
-              _buildHeader(employee),
+              _buildHeaderSafe(employee),
               ..._buildMenuTiles(),
             ],
           );
@@ -92,25 +83,24 @@ class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
     );
   }
 
-  Widget _buildHeader(Employee e) {
-    final ImageProvider avatarProvider = _avatarProvider(e);
+  Widget _buildHeaderSafe(Employee? e) {
+    final id = _safeText(e?.employeeID);
+    final name = _safeText(e?.employeeName);
+    final dept = _safeText(e?.departmentName);
 
     return DrawerHeader(
       decoration: const BoxDecoration(color: Color.fromRGBO(0, 105, 133, 1)),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 30,
-            backgroundImage: avatarProvider,
-          ),
+          _avatarSafe(e?.profileImageUrl),
           const SizedBox(width: 12),
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('ID: ${e.employeeID}', style: _headerTextStyle),
-              Text('Name: ${e.employeeName}', style: _headerTextStyle),
-              Text('Dept: ${e.departmentName}', style: _headerTextStyle),
+              Text('ID: $id', style: _headerTextStyle),
+              Text('Name: $name', style: _headerTextStyle),
+              Text('Dept: $dept', style: _headerTextStyle),
             ],
           ),
         ],
@@ -118,16 +108,46 @@ class _DrawerHomeScreenState extends State<DrawerHomeScreen> {
     );
   }
 
-  // Choose a cached provider or a local placeholder — never hit the network on drawer open
-  ImageProvider _avatarProvider(Employee e) {
-    final url = e.profileImageUrl; // String? is OK
-    if (url.trim().isNotEmpty) {
-      return CachedNetworkImageProvider(
-        url,
-        cacheManager: AvatarCacheManager.instance,
+  // "INVALID" if null/empty/whitespace
+  String _safeText(String? s) {
+    if (s == null) return 'INVALID';
+    final t = s.trim();
+    return t.isEmpty ? 'INVALID' : t;
+  }
+
+  // Broken-image indicator on failure, cached avatar on success
+  Widget _avatarSafe(String? url) {
+    final trimmed = (url ?? '').trim();
+    if (trimmed.isEmpty) {
+      return const CircleAvatar(
+        radius: 30,
+        child: Icon(Icons.broken_image, color: Colors.white),
       );
     }
-    return const AssetImage('assets/images/user.png');
+
+    return ClipOval(
+      child: CachedNetworkImage(
+        imageUrl: trimmed,
+        cacheManager: AvatarCacheManager.instance,
+        width: 60,
+        height: 60,
+        fit: BoxFit.cover,
+        fadeInDuration: const Duration(milliseconds: 120),
+        placeholder: (_, __) => const SizedBox(
+          width: 60,
+          height: 60,
+          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+        errorWidget: (_, __, ___) => const SizedBox(
+          width: 60,
+          height: 60,
+          child: CircleAvatar(
+            radius: 30,
+            child: Icon(Icons.broken_image, color: Colors.white),
+          ),
+        ),
+      ),
+    );
   }
 
   List<Widget> _buildMenuTiles() {

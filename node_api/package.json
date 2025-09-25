@@ -1,5 +1,5 @@
 {
-  "name": "node_mysql_api",
+  "name": "node_api",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -20,7 +20,6 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.1",
-    "mysql2": "^3.14.1",
     "pg": "^8.16.0",
     "pg-promise": "^11.13.0"
   }

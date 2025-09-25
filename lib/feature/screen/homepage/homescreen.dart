@@ -1,4 +1,5 @@
 import 'package:online_doc_savimex/app_import.dart';
+import 'package:online_doc_savimex/feature/screen/document/view_document.dart';
 
 class Homescreen extends StatefulWidget {
   final String employeeID;
@@ -23,6 +24,19 @@ class _HomescreenState extends State<Homescreen> with SingleTickerProviderStateM
 
   // Tabs for Uploaded / Assigned
   late final TabController _tab;
+
+  Future<void> _openDoc(Document doc) async {
+    final bool? changed = await Navigator.push<bool?>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DocumentScreen(documentId: doc.id as int),
+      ),
+    );
+    if (mounted && (changed ?? false)) {
+      _loadView(); // <- refresh the HomeView so status updates immediately
+    }
+  }
+
 
   @override
   void initState() {
@@ -204,12 +218,14 @@ class _HomescreenState extends State<Homescreen> with SingleTickerProviderStateM
                           isEdit: _isEdit,
                           selectedDocIds: _selectedDocIds,
                           onChanged: _onCheckboxChanged,
+                          onOpen: _openDoc,
                         ),
                         _DocsList(
                           docs: _uploaded,
                           isEdit: _isEdit,
                           selectedDocIds: _selectedDocIds,
                           onChanged: _onCheckboxChanged,
+                          onOpen: _openDoc,
                         ),
                       ],
                     );
@@ -251,18 +267,22 @@ class _HomescreenState extends State<Homescreen> with SingleTickerProviderStateM
   }
 }
 
+
+
 // List for one tab (reuses your DocumentItem and checkbox behavior)
 class _DocsList extends StatelessWidget {
   final List<Document> docs;
   final bool isEdit;
   final Set<int> selectedDocIds;
   final void Function(bool? checked, int docId) onChanged;
+  final Future<void> Function(Document doc) onOpen;
 
   const _DocsList({
     required this.docs,
     required this.isEdit,
     required this.selectedDocIds,
     required this.onChanged,
+    required this.onOpen,
   });
 
   @override
@@ -293,6 +313,7 @@ class _DocsList extends StatelessWidget {
                   status: (doc.status),
                   desc: doc.description as String, documentId: doc.id as int,
                   isReadOnly: doc.inboxType == 'SHARED',
+                  onTap: () => onOpen(doc),
                 ),
               ),
             ),

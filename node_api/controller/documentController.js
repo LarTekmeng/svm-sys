@@ -7,11 +7,10 @@ const extOf = (n) => {
   return i >= 0 ? n.slice(i).toLowerCase() : '';
 };
 
-// --- NEW: REGISTER-STYLE MULTIPART ---
+// --- REGISTER-STYLE MULTIPART ---
 // POST /api/documents/with-files (multipart/form-data)
 // fields: document_type_id, title, description
 // files:  "files"[] (one or many)
-// controllers/documentController.js
 exports.createWithFiles = async (req, res) => {
   const employeeId = req.employee?.id;
   if (!employeeId) return res.status(401).json({ error: 'Not Authenticated' });
@@ -21,7 +20,6 @@ exports.createWithFiles = async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  // Multer (from router) places files here:
   const files = Array.isArray(req.files) ? req.files : (req.file ? [req.file] : []);
   const uploadedKeys = [];
 
@@ -46,7 +44,7 @@ exports.createWithFiles = async (req, res) => {
       // Ask-for-Permission => PENDING, Read-Only => NULL
       const initialStatus = (setting?.action === 'Ask for Permission') ? 'PENDING' : null;
 
-      // (1) single INSERT with status
+      // (1) create document with status
       const { id: documentId } = await t.one(
         `INSERT INTO documents (document_type_id, uploader_id, title, description, status)
          VALUES ($1,$2,$3,$4,$5)
@@ -71,7 +69,7 @@ exports.createWithFiles = async (req, res) => {
         );
       }
 
-      // (2b) Defensive: approval type with no flows -> auto-complete to avoid stuck docs
+      // (2b) Defensive: approval type with no flows -> auto-complete
       if (setting?.action === 'Ask for Permission' && flows.length === 0) {
         await t.none(
           `UPDATE documents SET status = 'COMPLETED', updated_at = now() WHERE id = $1`,
@@ -79,10 +77,10 @@ exports.createWithFiles = async (req, res) => {
         );
       }
 
-      // (3) upload files to R2 + insert file rows
+      // (3) upload files to R2 + insert file rows (with uploaded_by)
       const savedFiles = [];
       for (const f of files) {
-        const ext = extOf(f.originalname).toLowerCase();
+        const ext = extOf(f.originalname);
         if (!ALLOWED_EXT.has(ext)) {
           throw new Error(`File type not allowed: ${ext || '(no extension)'}`);
         }
@@ -96,10 +94,10 @@ exports.createWithFiles = async (req, res) => {
         uploadedKeys.push(key);
 
         const row = await t.one(
-          `INSERT INTO document_files (document_id, file_name, file_type, file_size, file_url)
-           VALUES ($1,$2,$3,$4,$5)
-           RETURNING id, document_id, file_name, file_type, file_size, file_url, uploaded_at`,
-          [documentId, f.originalname, f.mimetype, f.size, publicUrl]
+          `INSERT INTO document_files (document_id, file_name, file_type, file_size, file_url, uploaded_by)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           RETURNING id, document_id, file_name, file_type, file_size, file_url, uploaded_at, uploaded_by`,
+          [documentId, f.originalname, f.mimetype, f.size, publicUrl, employeeId]
         );
         savedFiles.push(row);
       }
@@ -131,7 +129,6 @@ exports.createWithFiles = async (req, res) => {
 };
 
 
-
 // --- LIST FILES ---
 exports.listFiles = async (req, res) => {
   const documentId = parseInt(req.params.documentId, 10);
@@ -139,10 +136,12 @@ exports.listFiles = async (req, res) => {
 
   try {
     const rows = await db.any(`
-      SELECT id, document_id, file_name, file_type, file_size, file_url, uploaded_at
-      FROM document_files
-      WHERE document_id = $1
-      ORDER BY uploaded_at DESC
+      SELECT f.id, f.document_id, f.file_name, f.file_type, f.file_size, f.file_url, f.uploaded_at,
+             e.employee_name AS uploader_name, f.uploaded_by
+        FROM document_files f
+        LEFT JOIN employee e ON e.id = f.uploaded_by
+       WHERE f.document_id = $1
+       ORDER BY f.uploaded_at DESC
     `, [documentId]);
     return res.json(rows);
   } catch (e) {
@@ -150,6 +149,7 @@ exports.listFiles = async (req, res) => {
     return res.status(500).json({ error: 'Failed to fetch files' });
   }
 };
+
 
 // --- DELETE FILE (optional) ---
 exports.removeFile = async (req, res) => {
@@ -162,15 +162,14 @@ exports.removeFile = async (req, res) => {
   try {
     const row = await db.oneOrNone(`
       SELECT id, file_url
-      FROM document_files
-      WHERE id = $1 AND document_id = $2
+        FROM document_files
+       WHERE id = $1 AND document_id = $2
     `, [fileId, documentId]);
 
     if (!row) return res.status(404).json({ error: 'File not found' });
 
-    // If you want to also delete from R2, you must convert public URL back to key:
-    // public URL = `${R2_PUBLIC_URL_FILE}/${key}`
-    const base = (process.env.R2_PUBLIC_URL_FILE || '').replace(/\/+$/,'');
+    // If you want to also delete from R2, convert public URL back to key:
+    const base = (process.env.R2_PUBLIC_URL_FILE || '').replace(/\/+$/, '');
     const key = row.file_url.startsWith(base) ? row.file_url.substring(base.length + 1) : null;
 
     if (key) {
@@ -185,7 +184,8 @@ exports.removeFile = async (req, res) => {
   }
 };
 
-//Inside here is the View of Each Document
+
+// Inside here is the View of Each Document
 exports.detail = async (req, res) => {
   const docId = parseInt(req.params.id, 10);
   const me = req.employee?.id;
@@ -261,6 +261,8 @@ exports.detail = async (req, res) => {
   }
 };
 
+
+// ---------- APPROVE / REJECT ----------
 // ---------- APPROVE / REJECT ----------
 exports.decideStep = async (req, res) => {
   const me = req.employee?.id;
@@ -279,7 +281,8 @@ exports.decideStep = async (req, res) => {
 
   try {
     const result = await db.tx(async (t) => {
-      const ctx = await t.one(`
+      const ctx = await t.one(
+        `
         SELECT
           d.id AS document_id, d.status AS doc_status, d.uploader_id,
           d.document_type_id,
@@ -290,40 +293,34 @@ exports.decideStep = async (req, res) => {
         LEFT JOIN document_type_settings s ON s.document_type_id = d.document_type_id
        WHERE d.id = $1 AND ds.id = $2
        FOR UPDATE OF d, ds
-      `, [docId, stepId]);
+      `,
+        [docId, stepId]
+      );
 
       if (ctx.employee_id !== me) throw new Error('You are not the assignee of this step');
       if (ctx.uploader_id === me) throw new Error('Uploader cannot approve/reject their own document');
       if (ctx.action !== 'Ask for Permission') throw new Error('This document type is Read-Only');
       if (ctx.step_status !== 'PENDING') throw new Error('This step is not pending');
 
-      if (ctx.forward_mode === 'Step by Step') {
-        const minPending = await t.one(`
-          SELECT MIN(sequence) AS min_seq
-            FROM document_steps
-           WHERE document_id = $1 AND status = 'PENDING'
-        `, [docId]);
-        if (Number(minPending.min_seq) !== Number(ctx.sequence)) {
-          throw new Error('Not your turn yet');
-        }
-      }
+      // 1) Update the step
+      await t.none(
+        `UPDATE document_steps
+            SET status = $1, responded_at = now()
+          WHERE id = $2`,
+        [decision, stepId]
+      );
 
-      // Update step
-      await t.none(`
-        UPDATE document_steps
-           SET status = $1, responded_at = now()
-         WHERE id = $2
-      `, [decision, stepId]);
-
+      // 2) If REJECTED -> short-circuit and set doc to REJECTED
       if (decision === 'REJECTED') {
         await t.none(`UPDATE documents SET status = 'REJECTED', updated_at = now() WHERE id = $1`, [docId]);
         return { document_status: 'REJECTED' };
       }
 
-      // APPROVED path
+      // 3) APPROVED path
       if (ctx.forward_mode === 'Step by Step') {
-        // Add next step if any
-        const next = await t.oneOrNone(`
+        // Insert next step if there is one
+        await t.oneOrNone(
+          `
           WITH nxt AS (
             SELECT sequence, department_id, employee_id, step_action
               FROM document_type_flows
@@ -335,33 +332,37 @@ exports.decideStep = async (req, res) => {
           SELECT $3, n.sequence, n.department_id, n.employee_id, n.step_action, 'PENDING'
             FROM nxt n
           RETURNING id
-        `, [ctx.document_type_id, ctx.sequence, docId]);
-
-        if (!next) {
-          await t.none(`UPDATE documents SET status = 'COMPLETED', updated_at = now() WHERE id = $1`, [docId]);
-          return { document_status: 'COMPLETED' };
-        }
-        return { document_status: 'PENDING_NEXT' };
-      } else {
-        // Direct: complete when no pending left and none rejected
-        const agg = await t.one(`
-          SELECT
-            COUNT(*) FILTER (WHERE status = 'PENDING')  AS pending_cnt,
-            COUNT(*) FILTER (WHERE status = 'REJECTED') AS rejected_cnt
-          FROM document_steps
-          WHERE document_id = $1
-        `, [docId]);
-
-        if (Number(agg.rejected_cnt) > 0) {
-          await t.none(`UPDATE documents SET status = 'REJECTED', updated_at = now() WHERE id = $1`, [docId]);
-          return { document_status: 'REJECTED' };
-        }
-        if (Number(agg.pending_cnt) === 0) {
-          await t.none(`UPDATE documents SET status = 'COMPLETED', updated_at = now() WHERE id = $1`, [docId]);
-          return { document_status: 'COMPLETED' };
-        }
-        return { document_status: 'PENDING_OTHERS' };
+        `,
+          [ctx.document_type_id, ctx.sequence, docId]
+        );
       }
+      // for Direct mode, we don’t insert anything here
+
+      // 4) Canonicalize document.status based on current steps
+      const agg = await t.one(
+        `
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'PENDING')  AS pending_cnt,
+          COUNT(*) FILTER (WHERE status = 'REJECTED') AS rejected_cnt
+        FROM document_steps
+        WHERE document_id = $1
+      `,
+        [docId]
+      );
+
+      let newStatus;
+      if (Number(agg.rejected_cnt) > 0) {
+        newStatus = 'REJECTED';
+      } else if (Number(agg.pending_cnt) === 0) {
+        newStatus = 'COMPLETED';
+      } else {
+        // keep as 'PENDING' while other steps remain
+        // (If you prefer a visual change, use 'IN_PROGRESS' here and handle it in the app.)
+        newStatus = 'PENDING';
+      }
+
+      await t.none(`UPDATE documents SET status = $1, updated_at = now() WHERE id = $2`, [newStatus, docId]);
+      return { document_status: newStatus };
     });
 
     return res.json({ message: 'Decision recorded', ...result });
@@ -370,6 +371,8 @@ exports.decideStep = async (req, res) => {
     return res.status(400).json({ error: e.message || 'Decision failed' });
   }
 };
+
+
 
 // ---------- ADD FILES to existing doc (only when it’s my turn & Ask for Permission) ----------
 exports.addFilesToExisting = async (req, res) => {
@@ -380,6 +383,8 @@ exports.addFilesToExisting = async (req, res) => {
 
   const files = Array.isArray(req.files) ? req.files : (req.file ? [req.file] : []);
   if (!files.length) return res.status(400).json({ error: 'No files' });
+
+  const uploadedKeys = [];
 
   try {
     const saved = await db.tx(async (t) => {
@@ -413,7 +418,7 @@ exports.addFilesToExisting = async (req, res) => {
       if (header.uploader_id === me) throw new Error('Uploader cannot attach at this step');
       if (header.action !== 'Ask for Permission') throw new Error('Attachments not allowed for Read-Only type');
 
-      // Upload each file
+      // Upload each file (include uploaded_by and return uploader_name)
       const resultRows = [];
       for (const f of files) {
         const ext = extOf(f.originalname);
@@ -425,13 +430,20 @@ exports.addFilesToExisting = async (req, res) => {
           contentType: f.mimetype,
           originalname: f.originalname,
         });
+        uploadedKeys.push(key);
 
         const row = await t.one(
-          `INSERT INTO document_files (document_id, file_name, file_type, file_size, file_url)
-           VALUES ($1,$2,$3,$4,$5)
-           RETURNING id, document_id, file_name, file_type, file_size, file_url, uploaded_at`,
-          [docId, f.originalname, f.mimetype, f.size, publicUrl]
+          `WITH ins AS (
+             INSERT INTO document_files (document_id, file_name, file_type, file_size, file_url, uploaded_by)
+             VALUES ($1,$2,$3,$4,$5,$6)
+             RETURNING id, document_id, file_name, file_type, file_size, file_url, uploaded_at, uploaded_by
+           )
+           SELECT ins.*, e.employee_name AS uploader_name
+             FROM ins
+             LEFT JOIN employee e ON e.id = ins.uploaded_by`,
+          [docId, f.originalname, f.mimetype, f.size, publicUrl, me]
         );
+
         resultRows.push(row);
       }
       return resultRows;
@@ -439,11 +451,18 @@ exports.addFilesToExisting = async (req, res) => {
 
     return res.status(201).json({ message: 'Files uploaded', files: saved });
   } catch (e) {
+    // best-effort cleanup of uploaded objects if TX failed
+    if (uploadedKeys.length) {
+      const { deleteKey } = storage;
+      await Promise.all(uploadedKeys.map((k) => deleteKey(k)));
+    }
     console.error(e);
     return res.status(400).json({ error: e.message || 'Upload failed' });
   }
 };
 
+
+// --- LIST READ-ONLY DOCS SHARED TO ME (no duplicates) ---
 exports.listShared = async (req, res) => {
   const me = req.employee?.id;
   if (!me) return res.status(401).json({ error: 'Not authenticated' });
@@ -460,33 +479,25 @@ exports.listShared = async (req, res) => {
         d.status,
         d.created_at,
         d.updated_at,
-        u.name AS uploader_name
+        u.employee_name AS uploader_name
       FROM documents d
       JOIN document_type_settings s
         ON s.document_type_id = d.document_type_id
-      JOIN document_type_flows f
-        ON f.document_type_id = d.document_type_id
       JOIN document_types dt
         ON dt.id = d.document_type_id
       LEFT JOIN employee u
         ON u.id = d.uploader_id
       WHERE s.action = 'Read-Only'
-        AND f.employee_id = $1
+        AND EXISTS (
+          SELECT 1
+            FROM document_type_flows f
+           WHERE f.document_type_id = d.document_type_id
+             AND f.employee_id = $1
+        )
       ORDER BY d.created_at DESC
       `,
       [me]
     );
-
-    // (Optional) include a files preview count for each doc
-    // const fileCounts = await db.any(
-    //   `SELECT document_id, COUNT(*) AS cnt
-    //      FROM document_files
-    //     WHERE document_id = ANY($1)
-    //     GROUP BY document_id`,
-    //   [rows.map(r => r.id)]
-    // );
-    // const countMap = Object.fromEntries(fileCounts.map(f => [f.document_id, Number(f.cnt)]));
-    // rows.forEach(r => r.file_count = countMap[r.id] || 0);
 
     return res.json({ items: rows });
   } catch (e) {
@@ -494,4 +505,3 @@ exports.listShared = async (req, res) => {
     return res.status(500).json({ error: 'Failed to list shared documents' });
   }
 };
-//

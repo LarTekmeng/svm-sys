@@ -176,6 +176,7 @@ class DocumentFile {
   final int fileSize;
   final String fileUrl;
   final DateTime uploadedAt;
+  final String? uploaderName;
 
   const DocumentFile({
     required this.id,
@@ -185,6 +186,7 @@ class DocumentFile {
     required this.fileSize,
     required this.fileUrl,
     required this.uploadedAt,
+    this.uploaderName,
   });
 
   factory DocumentFile.fromJson(Map<String, dynamic> json) => DocumentFile(
@@ -195,6 +197,7 @@ class DocumentFile {
     fileSize: asInt(json['file_size'] ?? json['file_size_bytes']),
     fileUrl: (json['file_url'] ?? '') as String,
     uploadedAt: _safeDate(json['uploaded_at'] ?? json['upload_at']),
+    uploaderName: (json['uploader_name'] as String?),
   );
 }
 

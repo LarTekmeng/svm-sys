@@ -36,6 +36,7 @@ class _DocumentView extends StatefulWidget {
 }
 
 class _DocumentViewState extends State<_DocumentView> {
+  bool _shouldRefresh = false;
   bool _isImage(DocumentFile f) {
     final t = (f.fileType).toLowerCase();
     if (t.startsWith('image/')) return true;
@@ -77,30 +78,31 @@ class _DocumentViewState extends State<_DocumentView> {
     // Build the choices based on type
     final choice = await showModalBottomSheet<String>(
       context: context,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isImg)
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Save to Photos/Gallery'),
-                onTap: () => Navigator.pop(context, 'gallery'),
-              ),
-            ListTile(
-              leading: const Icon(Icons.folder),
-              title: const Text('Save to Files'),
-              onTap: () => Navigator.pop(context, 'files'),
+      builder:
+          (_) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isImg)
+                  ListTile(
+                    leading: const Icon(Icons.photo_library),
+                    title: const Text('Save to Photos/Gallery'),
+                    onTap: () => Navigator.pop(context, 'gallery'),
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.folder),
+                  title: const Text('Save to Files'),
+                  onTap: () => Navigator.pop(context, 'files'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.close),
+                  title: const Text('Cancel'),
+                  onTap: () => Navigator.pop(context, 'cancel'),
+                ),
+                const SizedBox(height: 4),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.close),
-              title: const Text('Cancel'),
-              onTap: () => Navigator.pop(context, 'cancel'),
-            ),
-            const SizedBox(height: 4),
-          ],
-        ),
-      ),
+          ),
     );
 
     if (choice == null || choice == 'cancel') return;
@@ -112,7 +114,11 @@ class _DocumentViewState extends State<_DocumentView> {
     final fileName = _suggestFileName(f);
 
     if (choice == 'gallery' && isImg) {
-      final r = await SaverGallery.saveImage(bytes, fileName: fileName, skipIfExists: true);
+      final r = await SaverGallery.saveImage(
+        bytes,
+        fileName: fileName,
+        skipIfExists: true,
+      );
       if (r.isSuccess) {
         _snack('Saved to Photos');
       } else {
@@ -143,10 +149,7 @@ class _DocumentViewState extends State<_DocumentView> {
     await f.writeAsBytes(bytes);
 
     final savedPath = await FlutterFileDialog.saveFile(
-      params: SaveFileDialogParams(
-        sourceFilePath: tmpPath,
-        fileName: fileName,
-      ),
+      params: SaveFileDialogParams(sourceFilePath: tmpPath, fileName: fileName),
     );
 
     if (savedPath == null) {
@@ -178,7 +181,6 @@ class _DocumentViewState extends State<_DocumentView> {
     return '';
   }
 
-
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<ViewBloc, ViewState>(
@@ -186,6 +188,14 @@ class _DocumentViewState extends State<_DocumentView> {
           (prev, curr) => prev.flashId != curr.flashId && curr.flash != null,
       listener: (context, state) {
         if (state.flash != null) {
+          final msg = state.flash!.toLowerCase();
+          if (msg.contains('approve') ||
+              msg.contains('rejected') ||
+              msg.contains('uploaded') ||
+              msg.contains('deleted') ||
+              msg.contains('completed')) {
+            _shouldRefresh = true;
+          }
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text(state.flash!)));
@@ -207,241 +217,275 @@ class _DocumentViewState extends State<_DocumentView> {
             );
           case ViewStatus.loaded:
             final d = state.detail!;
-            return Scaffold(
-              appBar: AppBar(
-                title: const Text('Document'),
+            return PopScope(
+              canPop: false,
+              onPopInvokedWithResult: (bool didPop, Object? result){
+                if(didPop) return;
+                Navigator.of(context).pop(_shouldRefresh);
+              },
+              child: Scaffold(
+                appBar: AppBar(
+                  title: const Text('Document'),
+                  backgroundColor: AppColors.background,
+                  foregroundColor: AppColors.white,
+                ),
                 backgroundColor: AppColors.background,
-                foregroundColor: AppColors.white,
-              ),
-              backgroundColor: AppColors.background,
-              body: RefreshIndicator(
-                onRefresh:
-                    () async =>
-                        context.read<ViewBloc>().add(const ViewRefreshed()),
-                child: ListView(
-                  children: [
-                    // Header (From + Date + Approve/Reject when allowed)
-                    DocumentHeader(
-                      uploaderName: d.uploaderName,
-                      uploaderDepartmentName: d.uploaderDepartmentName,
-                      postedAt: d.createdAt,
-                      canAct: d.canAct,
-                      onApprove:
-                          state.actBusy
-                              ? null
-                              : () => context.read<ViewBloc>().add(
-                                const ViewApprovePressed(),
-                              ),
-                      onReject:
-                          state.actBusy
-                              ? null
-                              : () => context.read<ViewBloc>().add(
-                                const ViewRejectPressed(),
-                              ),
-                    ),
-
-                    // Steps (only for Step by Step)
-                    DocumentSteps(
-                      forwardMode: d.forwardMode,
-                      flowsCount: d.flowsCount,
-                      steps: d.steps,
-                    ),
-
-                    // Your document form / content
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
+                body: RefreshIndicator(
+                  onRefresh:
+                      () async =>
+                          context.read<ViewBloc>().add(const ViewRefreshed()),
+                  child: ListView(
+                    children: [
+                      // Header (From + Date + Approve/Reject when allowed)
+                      DocumentHeader(
+                        uploaderName: d.uploaderName,
+                        uploaderDepartmentName: d.uploaderDepartmentName,
+                        postedAt: d.createdAt,
+                        canAct: d.canAct,
+                        onApprove:
+                            state.actBusy
+                                ? null
+                                : () => context.read<ViewBloc>().add(
+                                  const ViewApprovePressed(),
+                                ),
+                        onReject:
+                            state.actBusy
+                                ? null
+                                : () => context.read<ViewBloc>().add(
+                                  const ViewRejectPressed(),
+                                ),
                       ),
-                      child: Card(
-                        color: AppColors.card,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                d.title,
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(color: AppColors.white),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                d.description ?? '',
-                                style: TextStyle(color: AppColors.white),
-                              ),
-                            ],
+
+                      // Steps (only for Step by Step)
+                      DocumentSteps(
+                        forwardMode: d.forwardMode,
+                        flowsCount: d.flowsCount,
+                        steps: d.steps,
+                      ),
+
+                      // Your document form / content
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        child: Card(
+                          color: AppColors.card,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  d.title,
+                                  style: Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(color: AppColors.white),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  d.description,
+                                  style: TextStyle(color: AppColors.white),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
 
-                    // Attachments
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      child: Card(
-                        color: AppColors.card,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Attachments',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(color: AppColors.white),
-                              ),
-                              const SizedBox(height: 8),
-                              if (state.files.isEmpty)
-                                const Text(
-                                  'No files',
-                                  style: TextStyle(color: AppColors.white),
+                      // Attachments
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        child: Card(
+                          color: AppColors.card,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Attachments',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(color: AppColors.white),
                                 ),
-                              Builder(
-                                builder: (_) {
-                                  final images =
-                                      state.files.where(_isImage).toList();
-                                  if (images.isEmpty) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return GridView.builder(
-                                    shrinkWrap: true,
-                                    physics: NeverScrollableScrollPhysics(),
-                                    gridDelegate:
-                                        SliverGridDelegateWithFixedCrossAxisCount(
-                                          crossAxisCount: 3,
-                                          crossAxisSpacing: 8,
-                                          mainAxisSpacing: 8,
-                                          childAspectRatio: 1,
-                                        ),
-                                    itemCount: images.length,
-                                    itemBuilder: (_, i) {
-                                      final f = images[i];
-                                      return GestureDetector(
-                                        onTap:
-                                            () => _onDownloadPressed(f),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
+                                const SizedBox(height: 8),
+                                if (state.files.isEmpty)
+                                  const Text(
+                                    'No files',
+                                    style: TextStyle(color: AppColors.white),
+                                  ),
+                                Builder(
+                                  builder: (_) {
+                                    final images =
+                                        state.files.where(_isImage).toList();
+                                    if (images.isEmpty) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return GridView.builder(
+                                      shrinkWrap: true,
+                                      physics: NeverScrollableScrollPhysics(),
+                                      gridDelegate:
+                                          SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount: 3,
+                                            crossAxisSpacing: 8,
+                                            mainAxisSpacing: 8,
+                                            childAspectRatio: 1,
                                           ),
-                                          child: Stack(
-                                            fit: StackFit.expand,
-                                            children: [
-                                              Image.network(
-                                                f.fileUrl,
-                                                fit: BoxFit.cover,
-                                                errorBuilder:
-                                                    (_, __, ___) =>
-                                                        const Center(
-                                                          child: Icon(
-                                                            Icons.broken_image,
+                                      itemCount: images.length,
+                                      itemBuilder: (_, i) {
+                                        final f = images[i];
+                                        return GestureDetector(
+                                          onTap: () => _onDownloadPressed(f),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            child: Stack(
+                                              fit: StackFit.expand,
+                                              children: [
+                                                Image.network(
+                                                  f.fileUrl,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder:
+                                                      (_, __, ___) =>
+                                                          const Center(
+                                                            child: Icon(
+                                                              Icons.broken_image,
+                                                            ),
+                                                          ),
+                                                ),
+                                                Align(
+                                                  alignment:
+                                                      Alignment.bottomCenter,
+                                                  child: Container(
+                                                    padding: EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 4,
+                                                    ),
+                                                    color: Colors.black54,
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .center,
+                                                      children: [
+                                                        Text(
+                                                          f.fileName,
+                                                          maxLines: 1,
+                                                          overflow:
+                                                              TextOverflow
+                                                                  .ellipsis,
+                                                          style: TextStyle(
+                                                            color:
+                                                                AppColors.white,
+                                                            fontSize: 12,
                                                           ),
                                                         ),
-                                              ),
-                                              Align(
-                                                alignment:
-                                                    Alignment.bottomCenter,
-                                                child: Container(
-                                                  padding: EdgeInsets.symmetric(
-                                                    horizontal: 6,
-                                                    vertical: 4,
-                                                  ),
-                                                  color: Colors.black54,
-                                                  child: Text(
-                                                    f.fileName,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: TextStyle(
-                                                      color: AppColors.white,
-                                                      fontSize: 12,
+                                                        if (f.uploaderName !=
+                                                                null &&
+                                                            f.uploaderName!
+                                                                .trim()
+                                                                .isNotEmpty)
+                                                          Text(
+                                                            'From: ${f.uploaderName}',
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                            style: TextStyle(
+                                                              color:
+                                                                  Colors.white70,
+                                                              fontSize: 11,
+                                                            ),
+                                                          ),
+                                                      ],
                                                     ),
                                                   ),
                                                 ),
-                                              ),
-                                            ],
+                                              ],
+                                            ),
                                           ),
-                                        ),
-                                      );
-                                    },
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+
+                                const SizedBox(height: 12),
+
+                                ...state.files.where((f) => !_isImage(f)).map((
+                                  f,
+                                ) {
+                                  final kb = (f.fileSize / 1024).toStringAsFixed(
+                                    1,
                                   );
-                                },
-                              ),
-
-                              const SizedBox(height: 12),
-
-                              ...state.files.where((f) => !_isImage(f)).map((
-                                f,
-                              ) {
-                                final kb = (f.fileSize / 1024).toStringAsFixed(
-                                  1,
-                                );
-                                return ListTile(
-                                  dense: true,
-                                  leading: Icon(
-                                    Icons.insert_drive_file,
-                                    color: AppColors.white,
-                                  ),
-                                  title: Text(
-                                    f.fileName,
-                                    style: TextStyle(color: AppColors.white),
-                                  ),
-                                  subtitle: Text(
-                                    '${f.fileType} · ${kb} KB',
-                                    style: TextStyle(color: Colors.white70),
-                                  ),
-                                  trailing: IconButton(
-                                    onPressed:
-                                        () => _onDownloadPressed(f),
-                                    icon: Icon(
-                                      Icons.download,
+                                  return ListTile(
+                                    dense: true,
+                                    leading: Icon(
+                                      Icons.insert_drive_file,
                                       color: AppColors.white,
                                     ),
-                                    tooltip: 'Open / Download',
-                                  ),
-                                  onTap: () => _onDownloadPressed(f),
-                                );
-                              }).toList(),
-                              const SizedBox(height: 4),
-                              if (state.uploadBusy)
-                                const LinearProgressIndicator(minHeight: 2),
-                            ],
+                                    title: Text(
+                                      f.fileName,
+                                      style: TextStyle(color: AppColors.white),
+                                    ),
+                                    subtitle: Text(
+                                      '${f.fileType} · ${kb} KB'
+                                      '${(f.uploaderName != null && f.uploaderName!.trim().isNotEmpty) ? ' · From: ${f.uploaderName}' : ''}',
+                                      style: TextStyle(color: Colors.white70),
+                                    ),
+                                    trailing: IconButton(
+                                      onPressed: () => _onDownloadPressed(f),
+                                      icon: Icon(
+                                        Icons.download,
+                                        color: AppColors.white,
+                                      ),
+                                      tooltip: 'Open / Download',
+                                    ),
+                                    onTap: () => _onDownloadPressed(f),
+                                  );
+                                }).toList(),
+                                const SizedBox(height: 4),
+                                if (state.uploadBusy)
+                                  const LinearProgressIndicator(minHeight: 2),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 100),
-                  ],
+                      const SizedBox(height: 100),
+                    ],
+                  ),
                 ),
-              ),
 
-              // Bottom attachment bar (only when canAttach)
-              bottomNavigationBar:
-                  d.canAttach
-                      ? SafeArea(
-                        child: Container(
-                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  icon: const Icon(Icons.attach_file),
-                                  label: const Text('Add attachment'),
-                                  onPressed:
-                                      state.uploadBusy
-                                          ? null
-                                          : () =>
-                                              _pickAndDispatchFiles(context),
+                // Bottom attachment bar (only when canAttach)
+                bottomNavigationBar:
+                    d.canAttach
+                        ? SafeArea(
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    icon: const Icon(Icons.attach_file),
+                                    label: const Text('Add attachment'),
+                                    onPressed:
+                                        state.uploadBusy
+                                            ? null
+                                            : () =>
+                                                _pickAndDispatchFiles(context),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      )
-                      : null,
+                        )
+                        : null,
+              ),
             );
         }
       },
