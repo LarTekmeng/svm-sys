@@ -4,11 +4,13 @@ import 'package:online_doc_savimex/app_import.dart';
 
 class EmployeeRepository{
   final String baseUrl;
-  EmployeeRepository({required this.baseUrl});
+  final http.Client _client;
+
+  EmployeeRepository({required this.baseUrl, http.Client? client}) : _client = client ?? http.Client();
 
   Future<Employee> fetchEmployeeByID(String employeeId) async {
     final uri = (Uri.parse('$baseUrl/api/employees/$employeeId'));
-    final resp = await http.get(uri);
+    final resp = await _client.get(uri);
     if (resp.statusCode != 200) {
       throw Exception('Failed to load user');
     }
@@ -29,7 +31,7 @@ class EmployeeRepository{
 
   Future<List<Employee>> fetchEmployeesByDepartment(int departmentId) async {
     final url = Uri.parse('$baseUrl/api/employees/$departmentId/');
-    final response = await http.get(url);
+    final response = await _client.get(url);
 
     if (response.statusCode != 200) {
       throw Exception('Failed to load employees for department');
@@ -40,4 +42,6 @@ class EmployeeRepository{
         .map((json) => Employee.fromJson(json as Map<String, dynamic>))
         .toList();
   }
+
+  void dispose() => _client.close();
  }

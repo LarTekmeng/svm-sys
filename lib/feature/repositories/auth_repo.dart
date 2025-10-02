@@ -1,17 +1,13 @@
-// lib/feature/data/auth_repository.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:dio/dio.dart';
 import 'package:jwt_decode/jwt_decode.dart';
 import 'package:online_doc_savimex/app_import.dart';
 import 'package:online_doc_savimex/feature/service/device_info.dart';
-
 import '../service/secure_storage_service.dart';
 
 typedef TokenPair = ({String access, String refresh});
-
 
 class AuthRepository {
   AuthRepository._(this._dio, this._storage) {

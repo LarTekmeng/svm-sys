@@ -4,9 +4,16 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - .env                # <-- load DB_* into the API container
+      - .env                        # loads DB_* (and optional DATABASE_URL)
     environment:
-      - ${DATABASE_URL}
+      # EITHER pass discrete fields (recommended; no URL-encoding issues):
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
+      # OR (optional) pass a single connection string (ensure password is URL-encoded):
+      # DATABASE_URL: ${DATABASE_URL}
     depends_on:
       db:
         condition: service_healthy
@@ -16,7 +23,7 @@ services:
   db:
     image: postgres:15-alpine
     env_file:
-      - .env                # <-- load DB_* for Postgres init
+      - .env
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
@@ -24,17 +31,35 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "5433:5432"                 # host:container (host connects on 5433)
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres"]
+      # use your DB_USER/DB_NAME instead of hard-coded 'postgres'
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 3s
       retries: 20
     networks:
       - mynetwork
 
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "5050:80"                   # http://localhost:5050
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      - ./backups:/backups          # optional: drop .sql/.dump files here
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - mynetwork
+
 volumes:
   pgdata:
+  pgadmin-data:
 
 networks:
   mynetwork:

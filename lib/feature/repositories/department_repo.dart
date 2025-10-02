@@ -1,11 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
-import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
-
 import 'package:online_doc_savimex/app_import.dart';
-import 'package:online_doc_savimex/feature/service/device_info.dart';
-
 
 class DepartmentRepository {
 

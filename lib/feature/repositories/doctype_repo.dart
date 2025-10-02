@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../app_import.dart';
-import '../service/device_info.dart';
 
 class DoctypeRepository {
   final String baseUrl;

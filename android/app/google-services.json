@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "268501430444",
+    "project_id": "mobile-app-proj-bfbf2",
+    "storage_bucket": "mobile-app-proj-bfbf2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:268501430444:android:28fe3ddf85fc7b3e602f09",
+        "android_client_info": {
+          "package_name": "com.example.online_doc_savimex"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "268501430444-ovpe1o259ghi3rvkqkkfdflnbrp6lg7v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC2iG7SHQOgDhkSH1ze96mPQUbdsdr7E0k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "268501430444-ovpe1o259ghi3rvkqkkfdflnbrp6lg7v.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "268501430444-1v4p7qo3bfmvm2sgfit2khnk6vkhji4o.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.onlineDocSavimex"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
