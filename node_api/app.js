@@ -1,3 +1,4 @@
+// PATH: /node_api/app.js
 /* This is where backend start */
 
 require('dotenv').config();
@@ -5,6 +6,7 @@ const express = require('express');
 const cors    = require('cors');
 const { Client } = require('pg');
 const db = require('./db')
+const meRoutes = require('./route/me');
 
 const app = express();
 app.use(cors({
@@ -96,6 +98,7 @@ app.use('/api/doctypes', require('./route/docType'));
 app.use('/api/documents', require('./route/document'));
 app.use('/api/departments', require('./route/department'));
 app.use('/api/home', require('./route/home'));
+app.use('/api', meRoutes);
 
 // global error fallback (if you `next(err)`)
 app.use((err, req, res, next) => {

@@ -70,10 +70,10 @@ export 'package:online_doc_savimex/feature/repositories/home_repo.dart';
 /* ===== */
 
 /*Models*/
-export 'package:online_doc_savimex/feature/model/department.dart';
-export 'package:online_doc_savimex/feature/model/document.dart';
-export 'package:online_doc_savimex/feature/model/document_type.dart';
-export 'package:online_doc_savimex/feature/model/employee.dart';
+export 'package:online_doc_savimex/feature/model/department_mdl.dart';
+export 'package:online_doc_savimex/feature/model/document_mdl.dart';
+export 'package:online_doc_savimex/feature/model/document_type_mdl.dart';
+export 'package:online_doc_savimex/feature/model/employee_mdl.dart';
 /* ===== */
 
 

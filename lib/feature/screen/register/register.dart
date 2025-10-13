@@ -113,7 +113,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     // DEPARTMENT dropdown now holds int IDs
                     DropdownButtonFormField<int>(
-                      value: _selectedDeptId,
+                      initialValue: _selectedDeptId,
                       decoration: const InputDecoration(labelText: 'Department'),
                       items: depts.map((d) {
                         return DropdownMenuItem<int>(

@@ -1,4 +1,4 @@
-// documentFileStorage.js
+/*PATH: /node_api/service/documentFileStorage.js*/
 'use strict';
 
 const { PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');

@@ -1,4 +1,4 @@
-// r2.js
+/*PATH: /node_api/service/r2.js*/
 'use strict';
 
 const { S3Client } = require('@aws-sdk/client-s3');

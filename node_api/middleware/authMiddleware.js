@@ -1,3 +1,4 @@
+// PATH: /node_api/middleware/authMiddleware.js
 const jwt = require('jsonwebtoken');
 
 module.exports = async function authMiddleware(req, res, next) {

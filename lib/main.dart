@@ -1,4 +1,5 @@
 import 'package:online_doc_savimex/feature/presentation/splash_screen.dart';
+import 'package:online_doc_savimex/feature/repositories/profile_repo.dart';
 import 'package:online_doc_savimex/feature/service/device_info.dart';
 import 'app_import.dart';
 
@@ -12,10 +13,11 @@ void main() async {
   await authRepo.init();
 
   final departmentRepo = DepartmentRepository(baseUrl: baseUrl);
-  final employeeRepo   = EmployeeRepository(baseUrl: baseUrl);
+  final employeeRepo   = EmployeeRepository(baseUrl: baseUrl, authRepo: authRepo);
   final doctypeRepo    = DoctypeRepository(baseUrl: baseUrl, authRepo: authRepo, empRepo: employeeRepo, deptRepo: departmentRepo);
   final homeRepo       = HomeRepo(baseUrl: baseUrl, authRepo: authRepo );
   final documentRepo = DocumentRepository(baseUrl: baseUrl, authRepo: authRepo);
+  final profileRepo = ProfileRepo(baseUrl: baseUrl, authRepo: authRepo);
 
   runApp(
     MultiRepositoryProvider(
@@ -26,6 +28,7 @@ void main() async {
         RepositoryProvider<DoctypeRepository>.value(value: doctypeRepo),
         RepositoryProvider<HomeRepo>.value(value: homeRepo),
         RepositoryProvider<DocumentRepository>.value(value: documentRepo),
+        RepositoryProvider<ProfileRepo>.value(value: profileRepo,),
       ],
       child: MultiBlocProvider(
         providers: [

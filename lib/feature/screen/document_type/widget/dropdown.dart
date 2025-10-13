@@ -42,7 +42,7 @@ Widget buildFlowRow({
           ),
           isDense: true,
         ),
-        value: selectedDept,
+        initialValue: selectedDept,
         hint: Text('Department'),
         items: deptItems.map((deptId) {
           final label = deptId == 'all'
@@ -77,7 +77,7 @@ Widget buildFlowRow({
                 ),
                 isDense: true,
               ),
-              value: selectedEmp,
+              initialValue: selectedEmp,
               hint: const Text('Employee'),
               items: empItems.map((empId) {
                 final label = empId == 'all'
@@ -110,7 +110,7 @@ Widget buildFlowRow({
                 ),
                 isDense: true,
               ),
-              value: selectedAction,
+              initialValue: selectedAction,
               hint: const Text('Select Action'),
               items: actionItems.map((action) {
                 return DropdownMenuItem(

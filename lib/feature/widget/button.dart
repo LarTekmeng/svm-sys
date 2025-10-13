@@ -7,7 +7,7 @@ Widget mainButton(VoidCallback onTap, String text, Color color) {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(30),
       ),
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 30),
     ),
     onPressed: onTap,
     child: Text(text, style: TextStyle(fontSize: 18, color: Colors.white)),

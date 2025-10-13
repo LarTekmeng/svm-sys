@@ -1,5 +1,8 @@
 import 'dart:async'; // for StreamSubscription
 import 'package:online_doc_savimex/app_import.dart';
+import 'package:online_doc_savimex/feature/bloc/editBLoC/edit_profile_bloc.dart';
+import 'package:online_doc_savimex/feature/bloc/editBLoC/edit_profile_event.dart';
+import 'package:online_doc_savimex/feature/bloc/editBLoC/edit_profile_state.dart';
 import 'package:online_doc_savimex/feature/screen/document/view_document.dart';
 
 // ⬇️ If you want to prefetch avatar here (optional), uncomment the two lines below
@@ -14,7 +17,8 @@ class Homescreen extends StatefulWidget {
   State<Homescreen> createState() => _HomescreenState();
 }
 
-class _HomescreenState extends State<Homescreen> with SingleTickerProviderStateMixin {
+class _HomescreenState extends State<Homescreen>
+    with SingleTickerProviderStateMixin {
   // HomeView data
   late Future<HomeView> _futureView;
 
@@ -54,14 +58,13 @@ class _HomescreenState extends State<Homescreen> with SingleTickerProviderStateM
   void initState() {
     super.initState();
 
-    _tab = TabController(length: 2, vsync: this)
-      ..addListener(() {
-        if (!_tab.indexIsChanging) {
-          setState(() {
-            _selectedDocIds.clear();
-          });
-        }
-      });
+    _tab = TabController(length: 2, vsync: this)..addListener(() {
+      if (!_tab.indexIsChanging) {
+        setState(() {
+          _selectedDocIds.clear();
+        });
+      }
+    });
 
     _homeRepo = context.read<HomeRepo>();
 
@@ -165,153 +168,192 @@ class _HomescreenState extends State<Homescreen> with SingleTickerProviderStateM
         // We render even while loading; Drawer will accept null and show a skeleton
         final employee = empSnap.data ?? _employeeCached;
 
-        return Scaffold(
-          backgroundColor: const Color(0xFF006080),
+        return BlocProvider(
+          create:
+              (context) =>
+                  EmployeeProfileBloc(repo: context.read<EmployeeRepository>())
+                    ..add(EmployeeProfileStarted(widget.employeeID)),
+          child: Scaffold(
+            backgroundColor: const Color(0xFF006080),
 
-          // ⬇️ Drawer now takes the already-fetched employee (NO fetching inside)
-          drawer: _isEdit ? null : DrawerHomeScreen(employee: employee),
-
-          body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                children: [
-                  // Header row with menu / title / edit toggle
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _isEdit
-                          ? TextButton(
-                        onPressed: _toggleSelectAll,
-                        child: Text(
-                          _selectedDocIds.isEmpty ? 'Select All' : 'Unselect All',
-                          style: const TextStyle(color: Colors.yellow),
-                        ),
-                      )
-                          : Builder(
-                        builder: (ctx) => IconButton(
-                          icon: const Icon(Icons.menu, color: Colors.yellow),
-                          onPressed: () => Scaffold.of(ctx).openDrawer(),
-                        ),
-                      ),
-                      const Text(
-                        'Document',
-                        style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            _isEdit = !_isEdit;
-                            if (!_isEdit) _selectedDocIds.clear();
-                          });
-                        },
-                        child: Text(_isEdit ? 'Cancel' : 'Edit', style: const TextStyle(color: Colors.yellow)),
-                      ),
-                    ],
-                  ),
-
-                  // Keep your existing search widget
-                  SearchBarField(showIcon: true),
-                  const SizedBox(height: 12),
-
-                  // Tabs under search (INBOX / UPLOAD)
-                  Container(
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: TabBar(
-                      controller: _tab,
-                      indicator: BoxDecoration(
-                        color: Colors.white.withOpacity(0.25),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      labelColor: Colors.white,
-                      unselectedLabelColor: Colors.white70,
-                      dividerColor: Colors.transparent,
-                      tabs: const [
-                        Tab(text: 'INBOX'),
-                        Tab(text: 'UPLOAD'),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Documents list(s)
-                  Expanded(
-                    child: FutureBuilder<HomeView>(
-                      future: _futureView,
-                      builder: (context, snap) {
-                        if (snap.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        if (snap.hasError) {
-                          return Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text('Error: ${snap.error}', style: const TextStyle(color: Colors.white)),
-                                const SizedBox(height: 8),
-                                FilledButton(onPressed: _loadView, child: const Text('Retry')),
-                              ],
-                            ),
-                          );
-                        }
-
-                        final view = snap.data!;
-                        _uploaded = view.uploadedByMe;
-                        _assigned = view.assignedToMe;
-
-                        return TabBarView(
-                          controller: _tab,
-                          children: [
-                            _DocsList(
-                              docs: _assigned,
-                              isEdit: _isEdit,
-                              selectedDocIds: _selectedDocIds,
-                              onChanged: _onCheckboxChanged,
-                              onOpen: _openDoc,
-                            ),
-                            _DocsList(
-                              docs: _uploaded,
-                              isEdit: _isEdit,
-                              selectedDocIds: _selectedDocIds,
-                              onChanged: _onCheckboxChanged,
-                              onOpen: _openDoc,
-                            ),
-                          ],
-                        );
+            // ⬇️ Drawer now takes the already-fetched employee (NO fetching inside)
+            drawer:
+                _isEdit
+                    ? null
+                    : BlocBuilder<EmployeeProfileBloc, EmployeeProfileState>(
+                      buildWhen:
+                          (prev, curr) =>
+                              prev.employee != curr.employee ||
+                              prev.status != curr.status,
+                      builder: (context, state) {
+                        final empForDrawer = state.employee ?? employee;
+                        return DrawerHomeScreen(employee: empForDrawer);
                       },
                     ),
-                  ),
 
-                  const SizedBox(height: 10),
-
-                  if (_isEdit)
-                    btnListAction(
-                          () => debugPrint('Trash: $_selectedDocIds'),
-                          () => debugPrint('Archive: $_selectedDocIds'),
+            body: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  children: [
+                    // Header row with menu / title / edit toggle
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _isEdit
+                            ? TextButton(
+                              onPressed: _toggleSelectAll,
+                              child: Text(
+                                _selectedDocIds.isEmpty
+                                    ? 'Select All'
+                                    : 'Unselect All',
+                                style: const TextStyle(color: Colors.yellow),
+                              ),
+                            )
+                            : Builder(
+                              builder:
+                                  (ctx) => IconButton(
+                                    icon: const Icon(
+                                      Icons.menu,
+                                      color: Colors.yellow,
+                                    ),
+                                    onPressed:
+                                        () => Scaffold.of(ctx).openDrawer(),
+                                  ),
+                            ),
+                        const Text(
+                          'Document',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _isEdit = !_isEdit;
+                              if (!_isEdit) _selectedDocIds.clear();
+                            });
+                          },
+                          child: Text(
+                            _isEdit ? 'Cancel' : 'Edit',
+                            style: const TextStyle(color: Colors.yellow),
+                          ),
+                        ),
+                      ],
                     ),
 
-                  const SizedBox(height: 10),
+                    // Keep your existing search widget
+                    SearchBarField(showIcon: true),
+                    const SizedBox(height: 12),
 
-                  mainButton(
-                        () async {
-                      final refreshed = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => UploadScreen(employeeID: widget.employeeID),
+                    // Tabs under search (INBOX / UPLOAD)
+                    Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: TabBar(
+                        controller: _tab,
+                        indicator: BoxDecoration(
+                          color: Colors.white.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      );
-                      if (refreshed == true && mounted) _loadView();
-                    },
-                    'New Document',
-                    Colors.green,
-                  ),
-                  const SizedBox(height: 8),
-                ],
+                        labelColor: Colors.white,
+                        unselectedLabelColor: Colors.white70,
+                        dividerColor: Colors.transparent,
+                        tabs: const [Tab(text: 'INBOX'), Tab(text: 'UPLOAD')],
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Documents list(s)
+                    Expanded(
+                      child: FutureBuilder<HomeView>(
+                        future: _futureView,
+                        builder: (context, snap) {
+                          if (snap.connectionState == ConnectionState.waiting) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+                          if (snap.hasError) {
+                            return Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Error: ${snap.error}',
+                                    style: const TextStyle(color: Colors.white),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  FilledButton(
+                                    onPressed: _loadView,
+                                    child: const Text('Retry'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+
+                          final view = snap.data!;
+                          _uploaded = view.uploadedByMe;
+                          _assigned = view.assignedToMe;
+
+                          return TabBarView(
+                            controller: _tab,
+                            children: [
+                              _DocsList(
+                                docs: _assigned,
+                                isEdit: _isEdit,
+                                selectedDocIds: _selectedDocIds,
+                                onChanged: _onCheckboxChanged,
+                                onOpen: _openDoc,
+                              ),
+                              _DocsList(
+                                docs: _uploaded,
+                                isEdit: _isEdit,
+                                selectedDocIds: _selectedDocIds,
+                                onChanged: _onCheckboxChanged,
+                                onOpen: _openDoc,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    if (_isEdit)
+                      btnListAction(
+                        () => debugPrint('Trash: $_selectedDocIds'),
+                        () => debugPrint('Archive: $_selectedDocIds'),
+                      ),
+
+                    const SizedBox(height: 10),
+
+                    mainButton(
+                      () async {
+                        final refreshed = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder:
+                                (_) =>
+                                    UploadScreen(employeeID: widget.employeeID),
+                          ),
+                        );
+                        if (refreshed == true && mounted) _loadView();
+                      },
+                      'New Document',
+                      Colors.green,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
               ),
             ),
           ),
@@ -340,7 +382,12 @@ class _DocsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (docs.isEmpty) {
-      return const Center(child: Text('No Document Data is Found!', style: TextStyle(color: Colors.white)));
+      return const Center(
+        child: Text(
+          'No Document Data is Found!',
+          style: TextStyle(color: Colors.white),
+        ),
+      );
     }
 
     return ListView.builder(

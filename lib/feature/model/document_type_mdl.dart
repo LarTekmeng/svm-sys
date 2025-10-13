@@ -1,0 +1,21 @@
+// lib/models/document_type_mdl.dart
+
+class DocumentType {
+  final int? id;
+  final String docTitle;
+  final String docDesc;
+
+  DocumentType({
+    this.id,
+    required this.docTitle,
+    required this.docDesc,
+  });
+
+  factory DocumentType.fromJson(Map<String, dynamic> json) {
+    return DocumentType(
+      id: json['id'] as int?,
+      docTitle: (json['title'] as String?) ?? '',
+      docDesc:  (json['description'] as String?) ?? '',
+    );
+  }
+}
