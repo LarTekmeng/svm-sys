@@ -1,13 +1,17 @@
+# Exported from Render on 2025-10-14T04:17:10Z
+version: "1"
 services:
-  - type: web
-    name: online-svm-system
-    runtime: docker
-    plan: free
-    branch: production
-    dockerfilePath: node_api/Dockerfile
-    dockerContext: node_api
-    autoDeploy: true
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
+- type: web
+  name: online-svm-system
+  runtime: docker
+  branch: production
+  repo: https://github.com/LarTekmeng/svm-sys
+  plan: free
+  envVars:
+  - key: NODE_ENV
+    sync: false
+  region: singapore
+  healthCheckPath: /health
+  dockerContext: node_api
+  dockerfilePath: node_api/Dockerfile
+  autoDeployTrigger: commit
