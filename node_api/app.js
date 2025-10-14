@@ -64,13 +64,16 @@ app.get('/api/home/stream', (req, res) => {
 
 (async () => {
   try {
-    const notifyClient = new Client({
-      host: process.env.DB_HOST,
-      port: Number(process.env.DB_PORT || 5432),
-      database: process.env.DB_NAME,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASS,
-    });
+    const connectionString = process.env.DATABASE_URL;
+    const notifyClient = connectionString
+      ? new Client({ connectionString, ssl: { rejectUnauthorized: false } })
+      : new Client({
+          host: process.env.DB_HOST,
+          port: Number(process.env.DB_PORT || 5432),
+          database: process.env.DB_NAME,
+          user: process.env.DB_USER,
+          password: process.env.DB_PASS,
+        });
     await notifyClient.connect();
     await notifyClient.query('LISTEN documents_channel');
     console.log('LISTEN documents_channel');
@@ -106,10 +109,14 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-const PORT = Number(process.env.APP_PORT) || 3000;
-const HOST = process.env.APP_HOST || '0.0.0.0'; // <— NEW
+const PORT = Number(process.env.PORT || process.env.APP_PORT || 3000);
+const HOST = process.env.APP_HOST || '0.0.0.0';
 
 app.get('/health', (req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+app.get('/healthz', (req, res) =>
+  res.status(200).json({ ok: true, ts: new Date().toISOString() })
+);
+
 app.get('/db-ping', async (req, res) => {
   try {
     const r = await db.one('select now() as now');

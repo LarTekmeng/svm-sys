@@ -1,0 +1,44 @@
+# # Step 1: Use a Node.js image for building
+# FROM node:20-bullseye-slim
+#
+# # Step 2: Set the working directory inside the container
+# WORKDIR /app
+#
+# # Step 3: Copy package.json and package-lock.json into the container
+# COPY package*.json ./
+#
+# # Step 4: Install dependencies inside the container
+# RUN npm install
+#
+# # Step 5: Copy the rest of your application files into the container
+# COPY . .
+#
+# # Step 7: Expose the port your app will run on
+# EXPOSE 3000
+#
+# # Step 8: Start the app (using the built JavaScript code)
+# CMD ["node", "app.js"]
+
+FROM node:20-alpine AS base
+WORKDIR /app
+
+# Install only production deps
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Copy source
+COPY . .
+
+# Environment
+ENV NODE_ENV=production
+
+# Optional: run as non-root
+RUN addgroup -S app && adduser -S app -G app
+USER app
+
+# (EXPOSE is optional on Render)
+# EXPOSE 10000
+
+# Start
+CMD ["node", "app.js"]
+
