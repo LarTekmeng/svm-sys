@@ -1,13 +1,13 @@
 services:
   - type: web
     name: online-svm-system
-    env: docker
+    runtime: docker
     plan: free
-    branch: production           # must exist
+    branch: production
     dockerfilePath: node_api/Dockerfile
     dockerContext: node_api
     autoDeploy: true
-    healthCheckPath: /health     # you already have /health
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
