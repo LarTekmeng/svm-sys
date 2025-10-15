@@ -14,17 +14,21 @@ class AuthRepository {
     _installInterceptors();
   }
 
-  static Future<AuthRepository> create() async{
-
+// /feature/repositories/auth_repo.dart
+  static Future<AuthRepository> create() async {
     final baseUrl = await ApiHost.resolve();
+    // Optional: remove after verifying in logs
+    // ignore: avoid_print
+    print('[API] baseUrl => $baseUrl');
+
     final dio = Dio(BaseOptions(
       baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 20),
       receiveTimeout: const Duration(seconds: 20),
     ));
-    final repo = AuthRepository._(dio, SecureStorageService());
-    return repo;
+    return AuthRepository._(dio, SecureStorageService());
   }
+
   final Dio _dio;
   final SecureStorageService _storage;
 
