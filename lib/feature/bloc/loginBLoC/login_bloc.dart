@@ -3,30 +3,48 @@ import 'package:online_doc_savimex/app_import.dart';
 class AuthLoginBloc extends Bloc<AuthLoginEvent, AuthLoginState> {
   final AuthRepository _repo;
   AuthLoginBloc(this._repo) : super(AuthInitial()) {
-    on<AppStarted> ((e, emit) async {
+    on<AppStarted>((e, emit) async {
       emit(AuthLoading());
-      final ok = await _repo.hasValidToken();
-      if(ok) {
-        final employee = await _repo.getPersistedEmployee();
-        emit(employee != null ? AuthAuthenticated(employee) : Unauthenticated());
-      } else {
+      try {
+        await _repo.init();
+
+        final ok = await _repo.hasValidToken();
+        if (ok) {
+          final employee = await _repo.getPersistedEmployee();
+          emit(
+            employee != null ? AuthAuthenticated(employee) : Unauthenticated(),
+          );
+        } else {
+          emit(Unauthenticated());
+        }
+      } catch (e) {
         emit(Unauthenticated());
       }
     });
-
-    on<LoginRequested>((e, emit) async{
+    on<LoginRequested>((e, emit) async {
       emit(AuthLoading());
       try {
-        final employee = await _repo.loginUser(employeeID: e.employeeID, password: e.password, rememberMe: e.rememberMe);
+        final employee = await _repo.loginUser(
+          employeeID: e.employeeID,
+          password: e.password,
+          rememberMe: e.rememberMe,
+        );
         emit(AuthAuthenticated(employee));
-      } catch (err){
+      } on AuthFailure catch (err) {
         emit(AuthFailure(err.toString()));
+      } catch (err){
+        emit(AuthFailureState('Login failed. please try again'));
       }
     });
 
-    on<LogoutRequested>((e,emit) async {
+    on<LogoutRequested>((e, emit) async {
       await _repo.logout();
       emit(Unauthenticated());
     });
   }
+}
+
+class AuthFailureState extends AuthLoginState {
+  final String message;
+  AuthFailureState(this.message);
 }

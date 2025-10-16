@@ -14,18 +14,23 @@ class AuthRepository {
     _installInterceptors();
   }
 
-// /feature/repositories/auth_repo.dart
+  // /feature/repositories/auth_repo.dart
   static Future<AuthRepository> create() async {
     final baseUrl = await ApiHost.resolve();
-    // Optional: remove after verifying in logs
-    // ignore: avoid_print
     print('[API] baseUrl => $baseUrl');
 
-    final dio = Dio(BaseOptions(
-      baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 20),
-      receiveTimeout: const Duration(seconds: 20),
-    ));
+    final dio = Dio(
+      BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 20),
+        receiveTimeout: const Duration(seconds: 20),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        validateStatus: (s) => s != null && s >= 200 && s < 300,
+      ),
+    );
     return AuthRepository._(dio, SecureStorageService());
   }
 
@@ -34,7 +39,6 @@ class AuthRepository {
 
   String? _currentAccessToken;
   String? _currentRefreshToken;
-
   Future<TokenPair?>? _refreshing; // refresh lock
 
   Dio get dio => _dio;
@@ -43,9 +47,8 @@ class AuthRepository {
 
   /// Call once at app start (e.g., in main)
   Future<void> init() async {
-    _currentAccessToken  = await _storage.readAccessToken();
+    _currentAccessToken = await _storage.readAccessToken();
     _currentRefreshToken = await _storage.readRefreshToken();
-
     if (_currentAccessToken != null && _currentAccessToken!.trim().isNotEmpty) {
       _dio.options.headers['Authorization'] = 'Bearer ${_currentAccessToken!}';
     } else {
@@ -53,12 +56,9 @@ class AuthRepository {
     }
   }
 
-
-
   // ===== Interceptors =====
   void _installInterceptors() {
     _dio.interceptors.clear();
-
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -68,15 +68,15 @@ class AuthRepository {
           if (isAuthRoute) {
             // Do NOT attach Authorization or refresh for login/register/etc.
             options.headers.remove('Authorization');
-            handler.next(options);
-            return;
+            return handler.next(options);
           }
 
           // Normal flow for protected routes:
-          _currentAccessToken  ??= await _storage.readAccessToken();
+          _currentAccessToken ??= await _storage.readAccessToken();
           _currentRefreshToken ??= await _storage.readRefreshToken();
 
-          if (_currentAccessToken == null || _isExpiringSoon(_currentAccessToken!)) {
+          if (_currentAccessToken == null ||
+              _isExpiringSoon(_currentAccessToken!)) {
             await _ensureFreshToken();
           }
 
@@ -97,7 +97,6 @@ class AuthRepository {
             handler.next(e);
             return;
           }
-
           if (e.response?.statusCode == 401 && req.extra['__retry'] != true) {
             try {
               final pair = await _ensureFreshToken();
@@ -115,8 +114,7 @@ class AuthRepository {
                   queryParameters: req.queryParameters,
                   options: opts,
                 );
-                handler.resolve(response);
-                return;
+                return handler.resolve(response);
               }
             } catch (_) {
               // fall through to logout
@@ -129,7 +127,6 @@ class AuthRepository {
       ),
     );
   }
-
 
   // ===== Refresh logic =====
 
@@ -147,30 +144,46 @@ class AuthRepository {
 
   Future<TokenPair?> _ensureFreshToken() async {
     // If another refresh is in flight, await it
-    if (_refreshing != null) return await _refreshing;
+    if (_refreshing != null) return _refreshing;
 
     // Still valid? Use it
     if (_currentAccessToken != null && !_isExpiringSoon(_currentAccessToken!)) {
-      return (access: _currentAccessToken!, refresh: _currentRefreshToken ?? '');
+      return (
+        access: _currentAccessToken!,
+        refresh: _currentRefreshToken ?? '',
+      );
     }
 
     _currentRefreshToken ??= await _storage.readRefreshToken();
     final rt = _currentRefreshToken;
-    if (rt == null || rt.trim().isEmpty || Jwt.isExpired(rt)) return null;
-
+    if (rt == null || rt.trim().isEmpty) return null;
     final c = Completer<TokenPair?>();
     _refreshing = c.future;
-
     try {
       // Use a bare Dio client to avoid re-entering interceptors
-      final bare = Dio(BaseOptions(baseUrl: _dio.options.baseUrl));
-      final res = await bare.post('/api/auth/refresh', data: {'refreshToken': rt});
+      final bare = Dio(
+        BaseOptions(
+          baseUrl: _dio.options.baseUrl,
+          connectTimeout: Duration(seconds: 20),
+          receiveTimeout: Duration(seconds: 20),
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          validateStatus: (s) => true,
+        ),
+      );
+      final res = await bare.post(
+        '/api/auth/refresh',
+        data: {'refreshToken': rt},
+      );
       if (res.statusCode != 200) {
+        await logout();
         c.complete(null);
         return null;
       }
 
-      final map  = res.data as Map<String, dynamic>;
+      final map = res.data as Map<String, dynamic>;
       final newA = (map['accessToken'] ?? map['access_token'])?.toString();
       final newR = (map['refreshToken'] ?? map['refresh_token'])?.toString();
 
@@ -179,7 +192,7 @@ class AuthRepository {
         return null;
       }
 
-      _currentAccessToken  = newA;
+      _currentAccessToken = newA;
       _currentRefreshToken = (newR == null || newR.isEmpty) ? rt : newR;
 
       await _storage.writeAccessToken(_currentAccessToken!);
@@ -188,7 +201,10 @@ class AuthRepository {
       // Prime header for subsequent requests
       _dio.options.headers['Authorization'] = 'Bearer ${_currentAccessToken!}';
 
-      final pair = (access: _currentAccessToken!, refresh: _currentRefreshToken!);
+      final pair = (
+        access: _currentAccessToken!,
+        refresh: _currentRefreshToken!,
+      );
       c.complete(pair);
       return pair;
     } catch (err) {
@@ -223,7 +239,7 @@ class AuthRepository {
         ),
     });
 
-    final resp = await _dio.post('/api/auth/register', data: form);
+    final resp = await _dio.post('/api/auth/register', data: form, options: Options(validateStatus: (s) => s != null && s >= 200 && s < 300));
     if (resp.statusCode != 201) {
       throw DioException(
         requestOptions: resp.requestOptions,
@@ -244,43 +260,46 @@ class AuthRepository {
     final resp = await _dio.post(
       '/api/auth/login',
       data: {
-        'em_id': employeeID.trim(),    // trim input
-        'password': password,          // do NOT trim password
+        'em_id': employeeID.trim(), // trim input
+        'password': password, // do NOT trim password
         'rememberMe': rememberMe,
       },
       options: Options(
-        validateStatus: (s) => true,   // we handle 4xx ourselves
+        validateStatus: (s) => true, // we handle 4xx ourselves
         headers: {'Authorization': null},
       ),
     );
 
     if (resp.statusCode == 401) {
       // Pull a useful message from server if present
-      final msg = (resp.data is Map && (resp.data as Map)['message'] != null)
-          ? (resp.data as Map)['message'].toString()
-          : 'Invalid ID or password';
+      final msg =
+          (resp.data is Map && (resp.data as Map)['message'] != null)
+              ? (resp.data as Map)['message'].toString()
+              : 'Invalid ID or password';
       throw AuthFailure(msg);
     }
 
     if (resp.statusCode != 200) {
-      final msg = (resp.data is Map && (resp.data as Map)['message'] != null)
-          ? (resp.data as Map)['message'].toString()
-          : 'Login failed (HTTP ${resp.statusCode})';
+      final msg =
+          (resp.data is Map && (resp.data as Map)['message'] != null)
+              ? (resp.data as Map)['message'].toString()
+              : 'Login failed (HTTP ${resp.statusCode})';
       throw AuthFailure(msg);
     }
 
     final data = resp.data as Map<String, dynamic>;
-    final accessToken  = (data['accessToken'] ?? data['access_token']) as String;
-    final refreshToken = (data['refreshToken'] ?? data['refresh_token']) as String;
-    final empMap       = data['employee'] as Map<String, dynamic>;
-    final employee     = Employee.fromJson(empMap);
+    final accessToken = (data['accessToken'] ?? data['access_token']) as String;
+    final refreshToken =
+        (data['refreshToken'] ?? data['refresh_token']) as String;
+    final empMap = data['employee'] as Map<String, dynamic>;
+    final employee = Employee.fromJson(empMap);
 
     await _storage.writeAccessToken(accessToken);
     await _storage.writeRefreshToken(refreshToken);
     await _storage.writeEmployee(jsonEncode(empMap));
     await _storage.writeRememberMe(rememberMe);
 
-    _currentAccessToken  = accessToken;
+    _currentAccessToken = accessToken;
     _currentRefreshToken = refreshToken;
     _dio.options.headers['Authorization'] = 'Bearer $accessToken';
 
@@ -318,9 +337,10 @@ class AuthRepository {
 
   /// Optional: quick gate for screens
   Future<bool> hasValidToken() async {
-    _currentAccessToken  ??= await _storage.readAccessToken();
+    _currentAccessToken ??= await _storage.readAccessToken();
     _currentRefreshToken ??= await _storage.readRefreshToken();
-    if (_currentAccessToken != null && !_isExpiringSoon(_currentAccessToken!, seconds: 5)) {
+    if (_currentAccessToken != null &&
+        !_isExpiringSoon(_currentAccessToken!, seconds: 5)) {
       return true;
     }
     final p = await _ensureFreshToken();
