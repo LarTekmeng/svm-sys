@@ -213,19 +213,19 @@ class _EditEmployeeProfileScreenState extends State<EditEmployeeProfileScreen> {
               const SizedBox(height: 12),
 
               // Department (UNCHANGED)
-              DropdownButtonFormField<int>(
-                initialValue: _deptId, // keep your current value binding
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Department'),
-                items: (_departments.isNotEmpty ? _departments : widget.departments)
-                    .map((m) => DropdownMenuItem<int>(
-                  value: m['id'] as int,
-                  child: Text(m['name'] as String),
-                ))
-                    .toList(),
-                onChanged: (v) => setState(() => _deptId = v),
-                validator: (v) => v == null ? 'Please select a department' : null,
-              ),
+              // DropdownButtonFormField<int>(
+              //   initialValue: _deptId, // keep your current value binding
+              //   isExpanded: true,
+              //   decoration: const InputDecoration(labelText: 'Department'),
+              //   items: (_departments.isNotEmpty ? _departments : widget.departments)
+              //       .map((m) => DropdownMenuItem<int>(
+              //     value: m['id'] as int,
+              //     child: Text(m['name'] as String),
+              //   ))
+              //       .toList(),
+              //   onChanged: (v) => setState(() => _deptId = v),
+              //   validator: (v) => v == null ? 'Please select a department' : null,
+              // ),
               const SizedBox(height: 24),
 
               // Save button (UNCHANGED)
