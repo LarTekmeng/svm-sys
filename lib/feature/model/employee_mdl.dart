@@ -19,11 +19,18 @@ class Employee{
   });
 
   factory Employee.fromJson(Map<String, dynamic> json) {
+    final dep = json['department_id'] ?? json['dp_id'];
+    int? depId;
+    if (dep is int) {
+      depId = dep;
+    } else if (dep is String) {
+      depId = int.tryParse(dep);
+    }
     return Employee(
       id: json['id'] as int?,
       employeeName: (json['employee_name'] as String?) ?? '',
       email:  (json['email'] as String?) ?? '',
-      departmentID:  json['department_id'] as int?,
+      departmentID:  depId,
       employeeID: (json['em_id'] as String?) ?? '',
       departmentName: (json['department_name'] as String?) ?? '',
       profileImageUrl: (json['profile_image_url'] as String?) ?? '',
