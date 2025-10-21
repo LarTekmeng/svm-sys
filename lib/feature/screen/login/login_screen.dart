@@ -153,34 +153,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
-
-                          // Registration link
-                          Row(
-                            children: [
-                              const Text(
-                                'Does not have an account?',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                              TextButton(
-                                onPressed: isLoading
-                                    ? null
-                                    : () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                      const RegisterScreen(),
-                                    ),
-                                  );
-                                },
-                                child: const Text(
-                                  'REGISTER',
-                                  style: TextStyle(color: Colors.amber),
-                                ),
-                              ),
-                            ],
-                          ),
                         ],
                       ),
                     ),

@@ -1,12 +1,12 @@
 // routes/docTypes.js
 const router = require('express').Router();
 const ctrl   = require('../controller/docTypeController');
-const authMiddleware = require('../middleware/authMiddleware');
-router.post('/add', authMiddleware, ctrl.create);
-router.delete('/:id', authMiddleware, ctrl.delete);
-router.put('/:id', authMiddleware, ctrl.update);
-router.get('/:id', authMiddleware, ctrl.getId);
-router.put('/:documentTypeId/flow', authMiddleware, ctrl.updateFlow);
-router.get('/:documentTypeId/flow', authMiddleware, ctrl.getFlow);
+const {requireAuth} = require('../middleware/authMiddleware');
+router.post('/add', requireAuth, ctrl.create);
+router.delete('/:id', requireAuth, ctrl.delete);
+router.put('/:id', requireAuth, ctrl.update);
+router.get('/:id', requireAuth, ctrl.getId);
+router.put('/:documentTypeId/flow', requireAuth, ctrl.updateFlow);
+router.get('/:documentTypeId/flow', requireAuth, ctrl.getFlow);
 
 module.exports = router;

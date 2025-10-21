@@ -10,8 +10,8 @@ export 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /*Login BLOC*/
 export 'package:online_doc_savimex/feature/bloc/loginBLoC/login_bloc.dart';
-export 'package:online_doc_savimex/feature/bloc/loginBLoC/register_event.dart';
-export 'package:online_doc_savimex/feature/bloc/loginBLoC/register_state.dart';
+export 'package:online_doc_savimex/feature/bloc/loginBLoC/login_event.dart';
+export 'package:online_doc_savimex/feature/bloc/loginBLoC/login_state.dart';
 /* ===== */
 
 /*Register BLOC*/

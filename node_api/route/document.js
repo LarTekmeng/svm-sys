@@ -2,7 +2,7 @@
 'use strict';
 
 const router = require('express').Router();
-const auth   = require('../middleware/authMiddleware');
+const {requireAuth}   = require('../middleware/authMiddleware');
 const multer = require('multer');
 const ctrl   = require('../controller/documentController');
 
@@ -28,11 +28,11 @@ const upload = multer({
   },
 });
 
-router.get('/:id/detail', auth, ctrl.detail);
-router.post('/:id/steps/:stepId/decision', auth, ctrl.decideStep);
+router.get('/:id/detail', requireAuth, ctrl.detail);
+router.post('/:id/steps/:stepId/decision', requireAuth, ctrl.decideStep);
 router.post(
   '/:id/files',
-  auth,
+  requireAuth,
   multipartGuard,
   (req, res, next) => {
     upload.array('files', 12)(req, res, (err) => {
@@ -51,7 +51,7 @@ router.post(
 // Files : "files": [..] (one or many)
 router.post(
   '/with-files',
-  auth,
+  requireAuth,
   multipartGuard,
   // wrap multer to normalize errors
   (req, res, next) => {
@@ -67,8 +67,8 @@ router.post(
 );
 
 // ---- Files helpers ----
-router.get('/:documentId/files', auth, ctrl.listFiles);
-router.delete('/:documentId/files/:fileId', auth, ctrl.removeFile);
-router.get('/api/documents/shared', auth, ctrl.listShared);
+router.get('/:documentId/files', requireAuth, ctrl.listFiles);
+router.delete('/:documentId/files/:fileId', requireAuth, ctrl.removeFile);
+router.get('/api/documents/shared', requireAuth, ctrl.listShared);
 
 module.exports = router;

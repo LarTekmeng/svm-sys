@@ -56,7 +56,7 @@ class DrawerHomeScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => DocumentTypeScreen(employeeID: employee?.employeeID ?? ''),
+                  builder: (_) => RegisterScreen(),
                 ),
               );
             },

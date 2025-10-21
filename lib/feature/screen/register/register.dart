@@ -73,7 +73,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         }
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Register')),
+        appBar: AppBar(title: const Text('Create new employee')),
         body: BlocBuilder<RegisterBloc, RegisterState>(
           builder: (context, state) {
             if (state is RegisterLoading) {

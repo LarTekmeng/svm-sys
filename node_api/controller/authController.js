@@ -105,8 +105,17 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid Password' });
     }
 
-    const payload = { id: employee.id, em_id: employee.em_id };
-    const refreshPayload = { id: employee.id, em_id: employee.em_id, rememberMe };
+    const roleRow = await db.one(
+    `
+        SELECT r.code AS role_code
+        FROM role r
+        JOIN employee e ON e.role_id = r.id
+        WHERE e.id = $1
+    `, [employee.id]
+    )
+
+    const payload = { id: employee.id, em_id: employee.em_id, role: roleRow.role_code };
+    const refreshPayload = { id: employee.id, em_id: employee.em_id, rememberMe, role: roleRow.role_code };
 
     const accessTtl = rememberMe ? '1h' : '15m';
     const refreshTtl = rememberMe ? '30d' : '30m';
@@ -125,6 +134,7 @@ exports.login = async (req, res) => {
                         email:         employee.email,
                         dp_id:         employee.dp_id,
                         em_id:         employee.em_id,
+                        role: roleRow.role_code,
                   }
         }
     )
@@ -143,12 +153,13 @@ exports.refresh = async (req, res) => {
   try {
     const payload = jwt.verify(refreshToken, process.env.JWT_SECRET_REFRESH);
     // Issue a fresh short‐lived access token
-    const newAccess  = jwt.sign({ id: payload.id, em_id: payload.em_id },
+    const newAccess  = jwt.sign({ id: payload.id, em_id: payload.em_id, role: payload.role },
                                 process.env.JWT_SECRET_ACCESS,
                                 { expiresIn: '15m' });
     // (Optionally) rotate your refresh token:
     const newfreshTtl = payload.rememberMe ? '30d' : '30m';
-    const newRefresh = jwt.sign({ id: payload.id, em_id: payload.em_id, rememberMe: payload.rememberMe },
+    const newRefresh = jwt.sign(
+        { id: payload.id, em_id: payload.em_id, role: payload.role, rememberMe: payload.rememberMe },
                                 process.env.JWT_SECRET_REFRESH,
                                 { expiresIn: newfreshTtl });
     return res.json({ accessToken: newAccess, refreshToken: newRefresh });
