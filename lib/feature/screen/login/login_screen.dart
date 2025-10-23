@@ -1,5 +1,4 @@
 import 'dart:ui';
-
 import '../../../app_import.dart';
 
 class LoginScreen extends StatefulWidget {

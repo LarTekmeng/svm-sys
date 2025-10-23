@@ -134,7 +134,7 @@ exports.login = async (req, res) => {
                         email:         employee.email,
                         dp_id:         employee.dp_id,
                         em_id:         employee.em_id,
-                        role: roleRow.role_code,
+                        role:          roleRow.role_code,
                   }
         }
     )
