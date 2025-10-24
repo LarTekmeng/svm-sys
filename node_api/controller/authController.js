@@ -1,17 +1,21 @@
+'use strict';
+
 const bcrypt = require('bcrypt');
 const jwt    = require('jsonwebtoken');
 const db     = require('../db');
 const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage()});
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
-    const s3 = new S3Client({
-        region: "auto", // Or specify a region if needed
-        endpoint: process.env.R2_S3_ENDPOINT,
-        credentials: {
-            accessKeyId: process.env.R2_ACCESS_KEY,
-            secretAccessKey: process.env.R2_SECRET_KEY,
-        },
-    });
+const upload = multer({ storage: multer.memoryStorage() });
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+
+/* -------------------- S3 / R2 client -------------------- */
+const s3 = new S3Client({
+  region: 'auto',
+  endpoint: process.env.R2_S3_ENDPOINT,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY,
+    secretAccessKey: process.env.R2_SECRET_KEY,
+  },
+});
 
 async function uploadToR2(key, body, contentType) {
   await s3.send(new PutObjectCommand({
@@ -19,81 +23,130 @@ async function uploadToR2(key, body, contentType) {
     Key:         key,
     Body:        body,
     ContentType: contentType,
-    // you can also set ACL, metadata, etc here
   }));
 }
 
+/* -------------------- Token helpers -------------------- */
+const ACCESS_TTL_SHORT    = process.env.JWT_ACCESS_TTL_SHORT    || '15m';
+const ACCESS_TTL_REMEMBER = process.env.JWT_ACCESS_TTL_REMEMBER || '1h';
+const REFRESH_TTL_SHORT   = process.env.JWT_REFRESH_TTL_SHORT   || '30m';
+const REFRESH_TTL_REMEMBER= process.env.JWT_REFRESH_TTL_REMEMBER|| '30d';
+
+function normalizeRememberMe(v) {
+  // Accept true/false, "true"/"false", 1/0, "1"/"0"
+  if (typeof v === 'string') return v === 'true' || v === '1';
+  return !!v;
+}
+
+function signAccessToken(payload, rememberMe) {
+  const ttl = rememberMe ? ACCESS_TTL_REMEMBER : ACCESS_TTL_SHORT;
+  return jwt.sign(payload, process.env.JWT_SECRET_ACCESS, { expiresIn: ttl });
+}
+function signRefreshToken(payload, rememberMe) {
+  const ttl = rememberMe ? REFRESH_TTL_REMEMBER : REFRESH_TTL_SHORT;
+  return jwt.sign(payload, process.env.JWT_SECRET_REFRESH, { expiresIn: ttl });
+}
+
+function buildEmployeeDto(row, role) {
+  return {
+    id:            row.id,
+    employee_name: row.employee_name,
+    email:         row.email,
+    dp_id:         row.dp_id,
+    em_id:         row.em_id,
+    role,
+  };
+}
+
+/* =======================================================
+   REGISTER
+   - Creates employee as EMPLOYEE by default (role_id)
+   - Accepts optional profile image (R2)
+   ======================================================= */
 exports.register = [
   upload.single('profile_image'),
   async (req, res) => {
-    const { employee_name, email, password, dp_id, em_id } = req.body;
+    const { employee_name, email, password, dp_id, em_id } = req.body || {};
     if (!employee_name || !email || !password || !dp_id || !em_id) {
       return res.status(400).json({ error: 'Missing fields' });
     }
-    // ——————————————
-    // 2a) Check for duplicate em_id
-    const existing = await db.oneOrNone(
-      `SELECT id FROM employee WHERE em_id = $1`,
-      [em_id]
-    );
-    if (existing) {
-      return res.status(409).json({ error: 'Employee ID already in use' });
-    }
-    // ——————————————
-    try {
-      // 3) hash password
-      const hash = await bcrypt.hash(password, 10);
-      // 4) insert employee
-      const { id: employeeId } = await db.one(
-        `INSERT INTO employee (employee_name, email, password, dp_id, em_id)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id`,
-        [employee_name, email, hash, dp_id, em_id]
-      );
-      // 5) if there's an uploaded file, push to R2 & record its metadata
-      if (req.file) {
-        const file      = req.file;
-        const timestamp = Date.now();
-        const key       = `employees/${employeeId}/${timestamp}-${file.originalname}`;
-        await uploadToR2(key, file.buffer, file.mimetype);
-        const fileUrl = `${process.env.R2_PUBLIC_URL_PROFILE}/${key}`
-;
 
-        await db.none(
-          `INSERT INTO employee_images
-             (employee_id, file_name, file_type, file_size_bytes, file_url)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [
-            employeeId, file.originalname, file.mimetype, file.size, fileUrl
-          ]
+    try {
+      await db.tx(async (t) => {
+        // Duplicate checks (em_id + email)
+        const dup = await t.oneOrNone(
+          `SELECT 'em_id' AS field FROM employee WHERE em_id = $1
+           UNION ALL
+           SELECT 'email' FROM employee WHERE email = $2
+           LIMIT 1`,
+          [em_id, email]
         );
-      }
-      // 6) respond
-      res.status(201).json({
-        message: 'Registered successfully',
-        employee: { id: employeeId, employee_name, email, dp_id, em_id }
+        if (dup) {
+          const msg = dup.field === 'em_id' ? 'Employee ID already in use' : 'Email already in use';
+          throw Object.assign(new Error(msg), { http: 409 });
+        }
+
+        // Hash password
+        const hash = await bcrypt.hash(password, 10);
+
+        // Insert as EMPLOYEE by default
+        const inserted = await t.one(
+          `INSERT INTO employee (employee_name, email, password, dp_id, em_id, role_id)
+           VALUES ($1, $2, $3, $4, $5, (SELECT id FROM role WHERE code = 'EMPLOYEE'))
+           RETURNING id`,
+          [employee_name, email, hash, dp_id, em_id]
+        );
+        const employeeId = inserted.id;
+
+        // Optional profile image
+        if (req.file) {
+          const file      = req.file;
+          const timestamp = Date.now();
+          const key       = `employees/${employeeId}/${timestamp}-${file.originalname}`;
+          await uploadToR2(key, file.buffer, file.mimetype);
+          const fileUrl = `${(process.env.R2_PUBLIC_URL_PROFILE || '').replace(/\/+$/, '')}/${key}`;
+          await t.none(
+            `INSERT INTO employee_images (employee_id, file_name, file_type, file_size_bytes, file_url)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [employeeId, file.originalname, file.mimetype, file.size, fileUrl]
+          );
+        }
+
+        res.status(201).json({
+          message: 'Registered successfully',
+          employee: { id: employeeId, employee_name, email, dp_id, em_id, role: 'EMPLOYEE' },
+        });
       });
-    }
-    catch (e) {
+    } catch (e) {
+      if (e.http) return res.status(e.http).json({ error: e.message });
       if (e.code === '23505') {
-        return res.status(409).json({ error: 'Email already in use' });
+        // Fallback unique constraint catch
+        return res.status(409).json({ error: 'Duplicate key (email or em_id)' });
       }
-      console.error(e);
+      console.error('Register error:', e);
       res.status(500).json({ error: 'Server error' });
     }
-  }
+  },
 ];
 
-
+/* =======================================================
+   LOGIN
+   - LEFT JOIN role (fallback to EMPLOYEE if null)
+   - Consistent TTLs with rememberMe
+   ======================================================= */
 exports.login = async (req, res) => {
-  const { em_id, password, rememberMe } = req.body;
+  const { em_id, password } = req.body || {};
+  const rememberMe = normalizeRememberMe(req.body?.rememberMe);
 
   if (!em_id || !password) {
     return res.status(400).json({ error: 'Missing fields' });
   }
+
   try {
     const employee = await db.oneOrNone(
-      `SELECT * FROM employee WHERE em_id = $1`,
+      `SELECT id, em_id, employee_name, email, password, dp_id, role_id
+       FROM employee
+       WHERE em_id = $1`,
       [em_id]
     );
     if (!employee) {
@@ -102,68 +155,76 @@ exports.login = async (req, res) => {
 
     const match = await bcrypt.compare(password, employee.password);
     if (!match) {
-      return res.status(401).json({ error: 'Invalid Password' });
+      return res.status(401).json({ error: 'Invalid ID or Password' });
     }
 
-    const roleRow = await db.one(
-    `
-        SELECT r.code AS role_code
-        FROM role r
-        JOIN employee e ON e.role_id = r.id
-        WHERE e.id = $1
-    `, [employee.id]
-    )
+    // Safer role lookup
+    const roleRow = await db.oneOrNone(
+      `SELECT r.code AS role_code
+       FROM employee e
+       LEFT JOIN role r ON r.id = e.role_id
+       WHERE e.id = $1`,
+      [employee.id]
+    );
+    const role = roleRow?.role_code || 'EMPLOYEE';
 
-    const payload = { id: employee.id, em_id: employee.em_id, role: roleRow.role_code };
-    const refreshPayload = { id: employee.id, em_id: employee.em_id, rememberMe, role: roleRow.role_code };
+    const payload = { id: employee.id, em_id: employee.em_id, role };
+    const refreshPayload = { id: employee.id, em_id: employee.em_id, role, rememberMe };
 
-    const accessTtl = rememberMe ? '1h' : '15m';
-    const refreshTtl = rememberMe ? '30d' : '30m';
+    const accessToken  = signAccessToken(payload, rememberMe);
+    const refreshToken = signRefreshToken(refreshPayload, rememberMe);
 
-    const accessToken = jwt.sign(payload, process.env.JWT_SECRET_ACCESS, {expiresIn: accessTtl});
-    const refreshToken = jwt.sign(refreshPayload, process.env.JWT_SECRET_REFRESH, {expiresIn: refreshTtl});
-
-    res.json(
-        {
-            message: 'Login successful',
-            accessToken,
-            refreshToken,
-            employee: {
-                        id:            employee.id,
-                        employee_name: employee.employee_name,
-                        email:         employee.email,
-                        dp_id:         employee.dp_id,
-                        em_id:         employee.em_id,
-                        role:          roleRow.role_code,
-                  }
-        }
-    )
+    return res.json({
+      message: 'Login successful',
+      accessToken,
+      refreshToken,
+      employee: buildEmployeeDto(employee, role),
+    });
   } catch (e) {
-    console.error(e);
+    console.error('Login error:', e);
     res.status(500).json({ error: 'Server error' });
   }
 };
 
-// In authController.js
+/* =======================================================
+   REFRESH
+   - Accepts refreshToken in body
+   - Re-issues access (and rotates refresh) honoring rememberMe
+   - (Optional) verify user still exists
+   ======================================================= */
 exports.refresh = async (req, res) => {
-  const { refreshToken } = req.body;
+  const { refreshToken } = req.body || {};
   if (!refreshToken) {
     return res.status(400).json({ error: 'Missing refresh token' });
   }
+
   try {
-    const payload = jwt.verify(refreshToken, process.env.JWT_SECRET_REFRESH);
-    // Issue a fresh short‐lived access token
-    const newAccess  = jwt.sign({ id: payload.id, em_id: payload.em_id, role: payload.role },
-                                process.env.JWT_SECRET_ACCESS,
-                                { expiresIn: '15m' });
-    // (Optionally) rotate your refresh token:
-    const newfreshTtl = payload.rememberMe ? '30d' : '30m';
-    const newRefresh = jwt.sign(
-        { id: payload.id, em_id: payload.em_id, role: payload.role, rememberMe: payload.rememberMe },
-                                process.env.JWT_SECRET_REFRESH,
-                                { expiresIn: newfreshTtl });
+    let payload;
+    try {
+      payload = jwt.verify(refreshToken, process.env.JWT_SECRET_REFRESH);
+    } catch {
+      return res.status(401).json({ error: 'Invalid refresh token' });
+    }
+
+    // Optional: ensure user still exists (and maybe fetch current role)
+    const row = await db.oneOrNone(
+      `SELECT e.id, e.em_id, r.code AS role_code
+       FROM employee e
+       LEFT JOIN role r ON r.id = e.role_id
+       WHERE e.id = $1 AND e.em_id = $2`,
+      [payload.id, payload.em_id]
+    );
+    if (!row) return res.status(401).json({ error: 'User not found' });
+
+    const role = row.role_code || payload.role || 'EMPLOYEE';
+    const rememberMe = normalizeRememberMe(payload.rememberMe);
+
+    const newAccess  = signAccessToken({ id: row.id, em_id: row.em_id, role }, rememberMe);
+    const newRefresh = signRefreshToken({ id: row.id, em_id: row.em_id, role, rememberMe }, rememberMe);
+
     return res.json({ accessToken: newAccess, refreshToken: newRefresh });
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid refresh token' });
+    console.error('Refresh error:', err);
+    return res.status(500).json({ error: 'Server error' });
   }
 };
