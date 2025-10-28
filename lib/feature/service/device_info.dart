@@ -53,7 +53,7 @@ class ApiHost {
         // Physical device — EXPECT a dart-define or edit this to your LAN IP when testing.
         // Example: return _normalize('http://192.168.1.50:3000');
         // Keeping a sensible default:
-        return _normalize('http://192.168.11.43:3000'); // TODO: change to your machine's LAN IP
+        return _normalize('http://192.168.1.6:3000'); // TODO: change to your machine's LAN IP
       }
     }
 
@@ -63,7 +63,7 @@ class ApiHost {
         return _normalize('http://localhost:3000');
       } else {
         // Physical iPhone — use your machine's LAN IP
-        return _normalize('http://192.168.11.43:3000'); // TODO: change to your machine's LAN IP
+        return _normalize('http://192.168.1.6:3000'); // TODO: change to your machine's LAN IP
       }
     }
 

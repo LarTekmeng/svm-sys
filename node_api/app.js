@@ -94,23 +94,23 @@ app.get('/api/home/stream', requireAuth, (req, res) => {
   }
 })();
 
+app.use('/api/auth', require('./route/auth'));
+
 const securedBases = [
   '/api/employees',
   '/api/doctypes',
   '/api/documents',
-  '/api/departments',
   '/api/home',
-  '/api' // for your "me" routes
+  '/api/me' // for your "me" routes
 ];
 for (const base of securedBases) app.use(base, requireAuth);
 
-app.use('/api/auth',      require('./route/auth'));
 app.use('/api/employees', require('./route/employee'));
 app.use('/api/doctypes', require('./route/docType'));
 app.use('/api/documents', require('./route/document'));
 app.use('/api/departments', require('./route/department'));
 app.use('/api/home', require('./route/home'));
-app.use('/api', meRoutes);
+app.use('/api/me', meRoutes);
 
 // global error fallback (if you `next(err)`)
 app.use((err, req, res, next) => {

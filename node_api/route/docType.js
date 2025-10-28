@@ -2,12 +2,11 @@
 'use strict';
 
 const router = require('express').Router();
-const ctrl   = require('../controller/documentTypeController'); // ← keep name consistent
+const ctrl   = require('../controller/docTypeController'); // ← keep name consistent
 const { requireAuth } = require('../middleware/authMiddleware');
 
 // List doctypes (ADMIN → all; EMPLOYEE → mine)
-router.get('/', requireAuth, ctrl.getId);
-router.get('/:id', requireAuth, ctrl.getOne);
+router.get('/:id', requireAuth, ctrl.getId);
 
 
 // Create a new doctype (owner = current user)
