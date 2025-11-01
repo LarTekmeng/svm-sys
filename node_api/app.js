@@ -7,6 +7,8 @@ const cors    = require('cors');
 const { Client } = require('pg');
 const db = require('./db')
 const meRoutes = require('./route/me');
+const { requireAuth } = require('./middleware/authMiddleware');
+const { requireAdmin, makeBootstrapGuard } = require('./middleware/authMiddleware');
 
 const app = express();
 app.use(cors({
@@ -24,7 +26,7 @@ const SSE_CLIENTS = new Set();
  * Each client is stored as { res } in SSE_CLIENTS.
  * We remove the exact same object on close/aborted.
  */
-app.get('/api/home/stream', (req, res) => {
+app.get('/api/home/stream', requireAuth, (req, res) => {
   // TODO: attach auth middleware if you want JWT on this route
   // e.g. app.get('/api/home/stream', auth, (req, res) => { ... })
 
@@ -95,13 +97,23 @@ app.get('/api/home/stream', (req, res) => {
   }
 })();
 
-app.use('/api/auth',      require('./route/auth'));
+app.use('/api/auth', require('./route/auth'));
+
+const securedBases = [
+  '/api/employees',
+  '/api/doctypes',
+  '/api/documents',
+  '/api/home',
+  '/api/me' // for your "me" routes
+];
+for (const base of securedBases) app.use(base, requireAuth);
+
 app.use('/api/employees', require('./route/employee'));
 app.use('/api/doctypes', require('./route/docType'));
 app.use('/api/documents', require('./route/document'));
 app.use('/api/departments', require('./route/department'));
 app.use('/api/home', require('./route/home'));
-app.use('/api', meRoutes);
+app.use('/api/me', meRoutes);
 
 // global error fallback (if you `next(err)`)
 app.use((err, req, res, next) => {

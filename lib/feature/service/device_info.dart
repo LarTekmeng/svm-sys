@@ -12,8 +12,8 @@ class ApiHost {
     try {
       if (Platform.isAndroid) {
         final a = await info.androidInfo;
-        final model = (a.model ?? '').toLowerCase();
-        final product = (a.product ?? '').toLowerCase();
+        final model = (a.model).toLowerCase();
+        final product = (a.product).toLowerCase();
         return model.contains('sdk') || product.contains('sdk') || model.contains('emulator');
       }
       if (Platform.isIOS) {
@@ -49,6 +49,16 @@ class ApiHost {
       return (await _isEmulator())
           ? _normalize('http://localhost:3000')
           : _normalize('http://192.168.11.43:3000'); // your Mac’s LAN when testing on device
+    }
+
+    if (Platform.isIOS) {
+      // iOS simulator can use localhost
+      if (await _isEmulator()) {
+        return _normalize('http://localhost:3000');
+      } else {
+        // Physical iPhone — use your machine's LAN IP
+        return _normalize('http://192.168.1.6:3000'); // TODO: change to your machine's LAN IP
+      }
     }
 
     return _normalize('http://127.0.0.1:3000');

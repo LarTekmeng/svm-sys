@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:online_doc_savimex/app_import.dart';
+import 'package:online_doc_savimex/feature/screen/department/list_department.dart';
 import 'package:online_doc_savimex/feature/screen/profile/edit_employee_profile_screen.dart';
 import '../../../bloc/editBLoC/edit_profile_bloc.dart';
 import '../../../repositories/profile_repo.dart';
@@ -8,6 +9,17 @@ import 'avatar_cache_manager.dart';
 class DrawerHomeScreen extends StatelessWidget {
   final Employee? employee; // <- data comes from parent
   const DrawerHomeScreen({super.key, required this.employee});
+
+  String get _roleCode {
+    final rc = employee?.roleCode?.trim().toUpperCase();
+    return (rc == null || rc.isEmpty) ? 'UNKNOWM' : rc;
+  }
+
+  bool _isIn(Set<String> allow) => allow.contains(_roleCode);
+
+  Widget _visibleFor({required Set<String> roles, required Widget child}) {
+    return _isIn(roles) ? child : SizedBox.shrink();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,73 +30,72 @@ class DrawerHomeScreen extends StatelessWidget {
         children: [
           _Header(employee: employee),
 
-          // === keep your existing tiles below unchanged ===
-          _drawerTile(
-            context,
-            Icons.category,
-            'Document Type',
-                () {
+          /*visible for every Role*/
+          _drawerTile(context, Icons.category, 'Document Type', () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (_) => DocumentTypeScreen(
+                      employeeID: employee?.employeeID ?? '',
+                    ),
+              ),
+            );
+          }),
+          /*Visible for Role ADMIN*/
+          _visibleFor(
+            roles: const {'ADMIN'},
+            child: _drawerTile(context, Icons.home, 'Department', () {
               Navigator.pop(context);
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => DocumentTypeScreen(employeeID: employee?.employeeID ?? ''),
+                  builder:
+                      (_) => ListDepartment()
                 ),
               );
-            },
+            }),
           ),
-          _drawerTile(
-            context,
-            Icons.home,
-            'Department',
-                () {
+
+          /*Visible for Role ADMIN*/
+          _visibleFor(
+            roles: const {'ADMIN'},
+            child: _drawerTile(context, Icons.person, 'Employee', () {
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => DocumentTypeScreen(employeeID: employee?.employeeID ?? ''),
-                ),
+                MaterialPageRoute(builder: (_) => RegisterScreen()),
               );
-            },
+            }),
           ),
-          _drawerTile(
-            context,
-            Icons.person,
-            'Employee',
-                () {
-              Navigator.pop(context);
-              Navigator.push(
+          _drawerTile(context, Icons.logout, 'Logout', () async {
+            final authRepo = context.read<AuthRepository>();
+            await authRepo.logout();
+            if (context.mounted) {
+              Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => DocumentTypeScreen(employeeID: employee?.employeeID ?? ''),
-                ),
+                MaterialPageRoute(builder: (_) => LoginScreen()),
               );
-            },
-          ),
-          _drawerTile(
-            context,
-            Icons.logout,
-            'Logout',
-                () async {
-              final authRepo = context.read<AuthRepository>();
-              await authRepo.logout();
-              if (context.mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => LoginScreen()),
-                );
-              }
-            },
-          ),
+            }
+          }),
         ],
       ),
     );
   }
 
-  Widget _drawerTile(BuildContext ctx, IconData icon, String title, VoidCallback onTap) {
+  Widget _drawerTile(
+    BuildContext ctx,
+    IconData icon,
+    String title,
+    VoidCallback onTap,
+  ) {
     return ListTile(
       leading: Icon(icon, color: Colors.white),
-      title: Text(title, style: const TextStyle(fontSize: 16, color: Colors.white)),
+      title: Text(
+        title,
+        style: const TextStyle(fontSize: 16, color: Colors.white),
+      ),
       onTap: onTap,
     );
   }
@@ -96,7 +107,7 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final id   = _safeText(employee?.employeeID);
+    final id = _safeText(employee?.employeeID);
     final name = _safeText(employee?.employeeName);
     final dept = _safeText(employee?.departmentName);
 
@@ -110,7 +121,7 @@ class _Header extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('ID: $id',   style: _headerTextStyle),
+              Text('ID: $id', style: _headerTextStyle),
               Text('Name: $name', style: _headerTextStyle),
               Text('Dept: $dept', style: _headerTextStyle),
             ],
@@ -121,7 +132,9 @@ class _Header extends StatelessWidget {
   }
 
   static TextStyle get _headerTextStyle => const TextStyle(
-    color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600,
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
   );
 
   String _safeText(String? s) {
@@ -142,27 +155,31 @@ class _Header extends StatelessWidget {
       );
     }
     return GestureDetector(
-      onTap: () => _openEdit(context, e),        // <— navigate
+      onTap: () => _openEdit(context, e), // <— navigate
       child: ClipOval(
         child: CachedNetworkImage(
           imageUrl: url,
           cacheManager: AvatarCacheManager.instance,
-          cacheKey: cacheKey,                // stable key ties to employee
-          useOldImageOnUrlChange: true,      // keep previous image visible
+          cacheKey: cacheKey, // stable key ties to employee
+          useOldImageOnUrlChange: true, // keep previous image visible
           width: 60,
           height: 60,
           fit: BoxFit.cover,
           fadeInDuration: const Duration(milliseconds: 120),
-          placeholder: (_, __) => const SizedBox(
-            width: 60, height: 60,
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-          ),
-          errorWidget: (_, __, ___) =>
-          const CircleAvatar(radius: 30, child: Icon(Icons.person_off)),
+          placeholder:
+              (_, __) => const SizedBox(
+                width: 60,
+                height: 60,
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              ),
+          errorWidget:
+              (_, __, ___) =>
+                  const CircleAvatar(radius: 30, child: Icon(Icons.person_off)),
         ),
       ),
     );
   }
+
   Future<void> _openEdit(BuildContext context, Employee? e) async {
     if (e == null) return;
 
@@ -173,19 +190,20 @@ class _Header extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => BlocProvider.value(
-          value: profileBloc, // <-- provide the SAME bloc instance to the new route
-          child: EditEmployeeProfileScreen(
-            repo: profileRepo,
-            initialName: e.employeeName,
-            initialEmail: e.email,
-            initialDepartmentId: e.departmentID,
-            // you can keep your normalized list OR pass [] and let the screen load
-            departments: const <Map<String, dynamic>>[],
-          ),
-        ),
+        builder:
+            (_) => BlocProvider.value(
+              value:
+                  profileBloc, // <-- provide the SAME bloc instance to the new route
+              child: EditEmployeeProfileScreen(
+                repo: profileRepo,
+                initialName: e.employeeName,
+                initialEmail: e.email,
+                initialDepartmentId: e.departmentID,
+                // you can keep your normalized list OR pass [] and let the screen load
+                departments: const <Map<String, dynamic>>[],
+              ),
+            ),
       ),
     );
   }
-
 }

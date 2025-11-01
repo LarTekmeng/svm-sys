@@ -2,7 +2,8 @@
 'use strict';
 
 const router = require('express').Router();
-const auth   = require('../middleware/authMiddleware');
+const { requireAuth } = require('../middleware/authMiddleware');
+const { requireAssigneeForStep } = require('../middleware/stepGuard'); // optional but recommended
 const multer = require('multer');
 const ctrl   = require('../controller/documentController');
 
@@ -12,7 +13,6 @@ function multipartGuard(req, res, next) {
   if (!ct.startsWith('multipart/form-data')) {
     return res.status(415).json({ error: 'Content-Type must be multipart/form-data' });
   }
-  // helpful trace if client disconnects mid-upload
   req.on('aborted', () => console.warn('⚠️ request aborted by client during upload'));
   next();
 }
@@ -28,11 +28,40 @@ const upload = multer({
   },
 });
 
-router.get('/:id/detail', auth, ctrl.detail);
-router.post('/:id/steps/:stepId/decision', auth, ctrl.decideStep);
+/* =========================================================
+   STATIC ROUTES FIRST (avoid :id capturing 'shared')
+   ========================================================= */
+// List read-only documents shared with me
+// NOTE: your previous path '/api/documents/shared' was wrong once mounted.
+// Final URL becomes:  <mount-prefix>/documents/shared/mine
+router.get('/shared/mine', requireAuth, ctrl.listShared);
+
+/* =========================================================
+   DETAIL + ACTIONS
+   ========================================================= */
+// Document detail
+router.get('/:id/detail', requireAuth, ctrl.detail);
+
+// Single "decision" endpoint (your controller enforces assignee-only)
+router.post('/:id/steps/:stepId/decision', requireAuth, ctrl.decideStep);
+
+// OPTIONAL: explicit approve/reject routes with server-side guard
+router.post('/:id/steps/:stepId/approve', requireAuth, requireAssigneeForStep, (req, res) => {
+  req.body.decision = 'APPROVED';
+  return ctrl.decideStep(req, res);
+});
+router.post('/:id/steps/:stepId/reject', requireAuth, requireAssigneeForStep, (req, res) => {
+  req.body.decision = 'REJECTED';
+  return ctrl.decideStep(req, res);
+});
+
+/* =========================================================
+   FILES
+   ========================================================= */
+// Add files to existing document
 router.post(
   '/:id/files',
-  auth,
+  requireAuth,
   multipartGuard,
   (req, res, next) => {
     upload.array('files', 12)(req, res, (err) => {
@@ -46,14 +75,19 @@ router.post(
   ctrl.addFilesToExisting
 );
 
-// ---- Create + upload files in one call ----
-// Fields: document_type_id, title, description
-// Files : "files": [..] (one or many)
+// List files of a document
+router.get('/:documentId/files', requireAuth, ctrl.listFiles);
+
+// Delete one file
+router.delete('/:documentId/files/:fileId', requireAuth, ctrl.removeFile);
+
+/* =========================================================
+   CREATE DOCUMENT + FILES (one call)
+   ========================================================= */
 router.post(
   '/with-files',
-  auth,
+  requireAuth,
   multipartGuard,
-  // wrap multer to normalize errors
   (req, res, next) => {
     upload.array('files', 12)(req, res, (err) => {
       if (!err) return next();
@@ -65,10 +99,5 @@ router.post(
   },
   ctrl.createWithFiles
 );
-
-// ---- Files helpers ----
-router.get('/:documentId/files', auth, ctrl.listFiles);
-router.delete('/:documentId/files/:fileId', auth, ctrl.removeFile);
-router.get('/api/documents/shared', auth, ctrl.listShared);
 
 module.exports = router;

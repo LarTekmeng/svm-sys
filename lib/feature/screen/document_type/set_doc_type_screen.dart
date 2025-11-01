@@ -38,38 +38,51 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
 
   Future<void> _loadMetadata() async {
     final depts = await _repo.getDepartment();
-    final emps = await _repo.getEmployee();
+    final emps  = await _repo.getEmployee();
 
+    // who am I?
+    final me = await _repo.authRepo.getPersistedEmployee();
+    final meIdStr = me?.id?.toString();
+
+    // keep only OTHER employees (note: .toList(), not .toString())
+    final otherEmps = (meIdStr == null)
+        ? emps
+        : emps.where((e) => e.id?.toString() != meIdStr).toList();
+
+    // build department sources
     final deptIds = ['all', ...depts.map((d) => d.id.toString())];
-    final dMap = {for (var d in depts) d.id.toString(): d.name};
+    final dMap    = {for (final d in depts) d.id.toString(): d.name};
 
-    final allEmps = ['all', ...emps.map((e) => e.id.toString())];
-    final eMap = {for (var e in emps) e.id.toString(): e.employeeName};
+    // build EMPLOYEE sources **from filtered list**
+    final allEmpsFiltered = ['all', ...otherEmps.map((e) => e.id.toString())];
+    final eMapFiltered    = {for (final e in otherEmps) e.id.toString(): e.employeeName};
 
+    // group by department **from filtered list**
     final grouped = <String, List<String>>{};
-    for (var d in depts) {
+    for (final d in depts) {
       final key = d.id.toString();
       grouped[key] = [
         'all',
-        ...emps
-            .where((e) => e.departmentID.toString() == key)
+        ...otherEmps
+            .where((e) => e.departmentID?.toString() == key) // or e.dpId?.toString()
             .map((e) => e.id.toString()),
       ];
     }
 
     setState(() {
-      deptItems = deptIds;
+      deptItems   = deptIds;
       deptNameMap = dMap;
-      allEmpItems = allEmps;
-      empNameMap = eMap;
-      empMap = grouped;
 
-      // Start with a single row
-      selectedDepts = List.filled(1, null, growable: true);
-      selectedEmps = List.filled(1, null, growable: true);
-      selectedActions = List.filled(1, null, growable: true);
+      allEmpItems = allEmpsFiltered; // use filtered
+      empNameMap  = eMapFiltered;    // use filtered
+      empMap      = grouped;         // use filtered
+
+      selectedDepts    = List.filled(1, null, growable: true);
+      selectedEmps     = List.filled(1, null, growable: true);
+      selectedActions  = List.filled(1, null, growable: true);
     });
   }
+
 
   void _ensureAtLeastRows(int n) {
     // Expand lists to at least n, preserving existing values
@@ -135,84 +148,91 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
 
   Future<void> _prefillFromServer() async {
     try {
-      final data = await _repo.fetchDocTypeFlow(widget.documentTypeId);
-      final settings = (data['settings'] ?? {}) as Map<String, dynamic>;
-      final serverFlows = (data['flows'] ?? []) as List;
-
+      final data         = await _repo.fetchDocTypeFlow(widget.documentTypeId);
+      final settings     = (data['settings'] ?? {}) as Map<String, dynamic>;
+      final serverFlows  = (data['flows'] ?? []) as List;
       final serverAction = (settings['action'] ?? 'Read-Only').toString();
-      final serverMode = (settings['forward_mode'] ?? '').toString();
+      final serverMode   = (settings['forward_mode'] ?? '').toString();
 
-      // Always set action first
       selectedAction = serverAction;
 
       if (serverAction == 'Read-Only') {
-        // Runtime uses Direct, but we still show (and keep) saved flows
         setState(() {
           isDirectExpanded = true;
-          isStepExpanded = false;
+          isStepExpanded   = false;
           selectedForwardMode = 'Direct';
 
           final count = serverFlows.isEmpty ? 1 : serverFlows.length;
-          selectedDepts = List<String?>.filled(count, null, growable: true);
-          selectedEmps = List<String?>.filled(count, null, growable: true);
+          selectedDepts   = List<String?>.filled(count, null, growable: true);
+          selectedEmps    = List<String?>.filled(count, null, growable: true);
           selectedActions = List<String?>.filled(count, null, growable: true);
 
           for (var i = 0; i < serverFlows.length; i++) {
             final f = serverFlows[i] as Map<String, dynamic>;
-            selectedDepts[i] = (f['department_id']?.toString()) ?? 'all';
-            selectedEmps[i] = (f['employee_id']?.toString()) ?? 'all';
+            selectedDepts[i]   = (f['department_id']?.toString()) ?? 'all';
+            selectedEmps[i]    = (f['employee_id']?.toString()) ?? 'all';
             selectedActions[i] = (f['step_action']?.toString()) ?? 'READ-ONLY';
           }
         });
-        return;
-      }
-
-      if (serverMode == 'Direct') {
+      } else if (serverMode == 'Direct') {
         setState(() {
           isDirectExpanded = true;
-          isStepExpanded = false;
+          isStepExpanded   = false;
           selectedForwardMode = 'Direct';
 
-          selectedDepts = List<String?>.filled(1, null, growable: true);
-          selectedEmps = List<String?>.filled(1, null, growable: true);
+          selectedDepts   = List<String?>.filled(1, null, growable: true);
+          selectedEmps    = List<String?>.filled(1, null, growable: true);
           selectedActions = List<String?>.filled(1, null, growable: true);
 
           if (serverFlows.isNotEmpty) {
             final f = serverFlows.first as Map<String, dynamic>;
-            selectedDepts[0] = (f['department_id']?.toString()) ?? 'all';
-            selectedEmps[0] = (f['employee_id']?.toString()) ?? 'all';
+            selectedDepts[0]   = (f['department_id']?.toString()) ?? 'all';
+            selectedEmps[0]    = (f['employee_id']?.toString()) ?? 'all';
             selectedActions[0] = (f['step_action']?.toString()) ?? 'APPROVAL';
           }
         });
       } else if (serverMode == 'Step by Step') {
         setState(() {
           isDirectExpanded = false;
-          isStepExpanded = true;
+          isStepExpanded   = true;
           selectedForwardMode = 'Step by Step';
 
           final count = serverFlows.isEmpty ? 2 : serverFlows.length;
-          selectedDepts = List<String?>.filled(count, null, growable: true);
-          selectedEmps = List<String?>.filled(count, null, growable: true);
+          selectedDepts   = List<String?>.filled(count, null, growable: true);
+          selectedEmps    = List<String?>.filled(count, null, growable: true);
           selectedActions = List<String?>.filled(count, null, growable: true);
 
           for (var i = 0; i < serverFlows.length; i++) {
             final f = serverFlows[i] as Map<String, dynamic>;
-            selectedDepts[i] = (f['department_id']?.toString()) ?? 'all';
-            selectedEmps[i] = (f['employee_id']?.toString()) ?? 'all';
+            selectedDepts[i]   = (f['department_id']?.toString()) ?? 'all';
+            selectedEmps[i]    = (f['employee_id']?.toString()) ?? 'all';
             selectedActions[i] = (f['step_action']?.toString()) ?? 'APPROVAL';
           }
         });
       } else {
-        // Unknown/empty mode — leave defaults
         setState(() {
           isDirectExpanded = true;
           selectedForwardMode = 'Direct';
+        });
+      }
+
+      // ---- sanitize AFTER filling selections ----
+      final me = await _repo.authRepo.getPersistedEmployee();
+      final meIdStr = me?.id?.toString();
+      if (meIdStr != null) {
+        setState(() {
+          for (var i = 0; i < selectedEmps.length; i++) {
+            if (selectedEmps[i] == meIdStr) {
+              selectedEmps[i] = 'all';
+            }
+          }
         });
       }
     } catch (e) {
       debugPrint('Prefill failed: $e');
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -335,8 +355,9 @@ class _SetDocumentTypeScreenState extends State<SetDocumentTypeScreen> {
                                 isStepExpanded = false;
                                 selectedForwardMode = on ? 'Direct' : '';
                                 // Keep first row’s values; trim to 1 row.
-                                if (selectedDepts.isEmpty)
+                                if (selectedDepts.isEmpty) {
                                   _ensureAtLeastRows(1);
+                                }
                                 _trimToRows(1);
                               }),
                         ),

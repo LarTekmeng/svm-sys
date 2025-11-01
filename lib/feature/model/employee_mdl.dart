@@ -7,6 +7,8 @@ class Employee{
   final String employeeID;
   final String departmentName;
   final String profileImageUrl;
+  final int? roleId;
+  final String? roleCode;
 
   Employee({
     this.id,
@@ -16,6 +18,8 @@ class Employee{
     required this.employeeID,
     required this.departmentName,
     required this.profileImageUrl,
+    this.roleId,
+    this.roleCode
   });
 
   factory Employee.fromJson(Map<String, dynamic> json) {
@@ -34,17 +38,24 @@ class Employee{
       employeeID: (json['em_id'] as String?) ?? '',
       departmentName: (json['department_name'] as String?) ?? '',
       profileImageUrl: (json['profile_image_url'] as String?) ?? '',
+      roleId: json['role_id'] as int?,
+      roleCode: json['role_code'] as String?,
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    'id' : id,
-    'employee_name' : employeeName,
-    'email' : email,
-    'dp_id' : departmentID,
-    'em_id' : employeeID,
-
-  };
+  Map<String, dynamic> toJson(){
+    return{
+      'id' : id,
+      'employee_name' : employeeName,
+      'email' : email,
+      'dp_id' : departmentID,
+      'em_id' : employeeID,
+      'department_name' : departmentName,
+      'profile_image_url' : profileImageUrl,
+      'role_id' : roleId,
+      'role_code' : roleCode,
+    };
+  }
 
   Employee copyWith({
     int? id,
@@ -54,6 +65,8 @@ class Employee{
     String? employeeID,
     String? departmentName,
     String? profileImageUrl,
+    int? roleId,
+    String? roleCode,
   }) {
     return Employee(
       id: id ?? this.id,
@@ -63,6 +76,8 @@ class Employee{
       employeeID: employeeID ?? this.employeeID,
       departmentName: departmentName ?? this.departmentName,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+      roleId: roleId ?? this.roleId,
+      roleCode: roleCode ?? this.roleCode,
     );
   }
 }

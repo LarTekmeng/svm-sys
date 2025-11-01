@@ -1,5 +1,4 @@
 import 'dart:ui';
-
 import '../../../app_import.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -46,9 +45,9 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
         if (state is AuthFailure) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.error)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(state.error)));
         }
       },
       child: BlocBuilder<AuthLoginBloc, AuthLoginState>(
@@ -92,8 +91,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           _buildTextField(
                             label: 'ID',
                             controller: _employeeIdCtrl,
-                            validator: (v) =>
-                            (v == null || v.isEmpty) ? 'Enter ID' : null,
+                            validator:
+                                (v) =>
+                                    (v == null || v.isEmpty)
+                                        ? 'Enter ID'
+                                        : null,
                           ),
                           const SizedBox(height: 10),
 
@@ -102,10 +104,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             label: 'Password',
                             controller: _passCtrl,
                             obscure: true,
-                            validator: (v) =>
-                            (v == null || v.isEmpty)
-                                ? 'Enter password'
-                                : null,
+                            validator:
+                                (v) =>
+                                    (v == null || v.isEmpty)
+                                        ? 'Enter password'
+                                        : null,
                           ),
                           const SizedBox(height: 10),
 
@@ -115,69 +118,42 @@ class _LoginScreenState extends State<LoginScreen> {
                               isLoading
                                   ? const CircularProgressIndicator()
                                   : ElevatedButton(
-                                onPressed: isLoading ? null : _onLogin,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  elevation: 4,
-                                  shadowColor: Colors.black45,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                    BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 20.0,
-                                    vertical: 12,
-                                  ),
-                                  child: Text(
-                                    'Login',
-                                    style: TextStyle(
-                                      color: Colors.black,
-                                      fontWeight: FontWeight.bold,
+                                    onPressed: isLoading ? null : _onLogin,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      elevation: 4,
+                                      shadowColor: Colors.black45,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 20.0,
+                                        vertical: 12,
+                                      ),
+                                      child: Text(
+                                        'Login',
+                                        style: TextStyle(
+                                          color: Colors.black,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ),
                               const SizedBox(width: 10),
                               Checkbox(
                                 value: _rememberMe,
-                                onChanged: isLoading
-                                    ? null
-                                    : (v) => setState(
-                                        () => _rememberMe = v ?? false),
+                                onChanged:
+                                    isLoading
+                                        ? null
+                                        : (v) => setState(
+                                          () => _rememberMe = v ?? false,
+                                        ),
                               ),
                               const Text(
                                 'Remember',
                                 style: TextStyle(color: Colors.white),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-
-                          // Registration link
-                          Row(
-                            children: [
-                              const Text(
-                                'Does not have an account?',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                              TextButton(
-                                onPressed: isLoading
-                                    ? null
-                                    : () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                      const RegisterScreen(),
-                                    ),
-                                  );
-                                },
-                                child: const Text(
-                                  'REGISTER',
-                                  style: TextStyle(color: Colors.amber),
-                                ),
                               ),
                             ],
                           ),
@@ -214,9 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
             filled: true,
             fillColor: Colors.white,
             contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
           ),
         ),
       ],

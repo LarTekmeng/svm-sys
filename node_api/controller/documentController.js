@@ -1,3 +1,4 @@
+// controller/documentController.js
 const db = require('../db');
 const storage = require('../service/documentFileStorage');
 
@@ -7,13 +8,71 @@ const extOf = (n) => {
   return i >= 0 ? n.slice(i).toLowerCase() : '';
 };
 
+// ---------- helpers ----------
+const getMe = (req) => ({
+  id:   req.user?.id ?? req.employee?.id ?? null,
+  role: req.user?.role ?? req.employee?.role ?? null,
+});
+const isAdminReq = (req) => getMe(req).role === 'ADMIN';
+
+/** Admin can view all. Employee can view if: uploader OR assignee OR (Read-Only & in flow). */
+async function canViewDocument(dbOrTx, docId, userId, isAdmin) {
+  if (isAdmin) return true;
+  const row = await dbOrTx.oneOrNone(
+    `
+    SELECT
+      d.uploader_id,
+      s.action,
+      EXISTS (SELECT 1 FROM document_steps ds WHERE ds.document_id = d.id AND ds.employee_id = $2) AS is_assignee,
+      EXISTS (
+        SELECT 1 FROM document_type_flows f
+        WHERE f.document_type_id = d.document_type_id AND f.employee_id = $2
+      ) AS in_flow
+    FROM documents d
+    LEFT JOIN document_type_settings s ON s.document_type_id = d.document_type_id
+    WHERE d.id = $1
+    `,
+    [docId, userId]
+  );
+  if (!row) return false;
+  if (row.uploader_id === userId) return true;
+  if (row.is_assignee) return true;
+  if (row.action === 'Read-Only' && row.in_flow) return true;
+  return false;
+}
+
+/** Is the user the current actionable assignee (PENDING), honoring Step-by-Step? */
+async function isCurrentActionableAssignee(dbOrTx, docId, userId) {
+  const header = await dbOrTx.one(
+    `SELECT d.uploader_id, s.action, s.forward_mode
+     FROM documents d
+     LEFT JOIN document_type_settings s ON s.document_type_id = d.document_type_id
+     WHERE d.id = $1`, [docId]
+  );
+
+  const steps = await dbOrTx.any(
+    `SELECT id, sequence, status, employee_id
+     FROM document_steps WHERE document_id = $1 ORDER BY sequence ASC`, [docId]
+  );
+
+  if (header.action !== 'Ask for Permission') return false;
+  let actionable = null;
+  if (header.forward_mode === 'Step by Step') {
+    const minPending = steps
+      .filter(s => s.status === 'PENDING')
+      .reduce((min, s) => (min == null || s.sequence < min ? s.sequence : min), null);
+    actionable = steps.find(s => s.status === 'PENDING' && s.sequence === minPending && s.employee_id === userId);
+  } else {
+    actionable = steps.find(s => s.status === 'PENDING' && s.employee_id === userId);
+  }
+  return !!actionable && header.uploader_id !== userId;
+}
+
 // --- REGISTER-STYLE MULTIPART ---
-// POST /api/documents/with-files (multipart/form-data)
-// fields: document_type_id, title, description
-// files:  "files"[] (one or many)
+// POST /api/documents/with-files
 exports.createWithFiles = async (req, res) => {
-  const employeeId = req.employee?.id;
-  if (!employeeId) return res.status(401).json({ error: 'Not Authenticated' });
+  const me = getMe(req);
+  if (!me.id) return res.status(401).json({ error: 'Not Authenticated' });
 
   const { document_type_id, title, description } = req.body;
   if (!document_type_id || !String(title).trim() || !String(description).trim()) {
@@ -25,34 +84,27 @@ exports.createWithFiles = async (req, res) => {
 
   try {
     const result = await db.tx(async (t) => {
-      // (0) read settings & flows FIRST
       const setting = await t.oneOrNone(
-        `SELECT action, forward_mode
-           FROM document_type_settings
-          WHERE document_type_id = $1`,
+        `SELECT action, forward_mode FROM document_type_settings WHERE document_type_id = $1`,
         [document_type_id]
       );
 
       const flows = await t.any(
         `SELECT sequence, department_id, employee_id, step_action
-           FROM document_type_flows
-          WHERE document_type_id = $1
-          ORDER BY sequence ASC`,
+         FROM document_type_flows
+         WHERE document_type_id = $1
+         ORDER BY sequence ASC`,
         [document_type_id]
       );
 
-      // Ask-for-Permission => PENDING, Read-Only => NULL
       const initialStatus = (setting?.action === 'Ask for Permission') ? 'PENDING' : null;
 
-      // (1) create document with status
       const { id: documentId } = await t.one(
         `INSERT INTO documents (document_type_id, uploader_id, title, description, status)
-         VALUES ($1,$2,$3,$4,$5)
-         RETURNING id`,
-        [document_type_id, employeeId, String(title).trim(), String(description).trim(), initialStatus]
+         VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+        [document_type_id, me.id, String(title).trim(), String(description).trim(), initialStatus]
       );
 
-      // (2) create steps (direct vs step-by-step)
       const stepsToInsert =
         (setting?.action === 'Read-Only')
           ? []
@@ -69,21 +121,14 @@ exports.createWithFiles = async (req, res) => {
         );
       }
 
-      // (2b) Defensive: approval type with no flows -> auto-complete
       if (setting?.action === 'Ask for Permission' && flows.length === 0) {
-        await t.none(
-          `UPDATE documents SET status = 'COMPLETED', updated_at = now() WHERE id = $1`,
-          [documentId]
-        );
+        await t.none(`UPDATE documents SET status = 'COMPLETED', updated_at = now() WHERE id = $1`, [documentId]);
       }
 
-      // (3) upload files to R2 + insert file rows (with uploaded_by)
       const savedFiles = [];
       for (const f of files) {
         const ext = extOf(f.originalname);
-        if (!ALLOWED_EXT.has(ext)) {
-          throw new Error(`File type not allowed: ${ext || '(no extension)'}`);
-        }
+        if (!ALLOWED_EXT.has(ext)) throw new Error(`File type not allowed: ${ext || '(no extension)'}`);
 
         const { key, publicUrl } = await storage.uploadBuffer({
           documentId,
@@ -97,7 +142,7 @@ exports.createWithFiles = async (req, res) => {
           `INSERT INTO document_files (document_id, file_name, file_type, file_size, file_url, uploaded_by)
            VALUES ($1,$2,$3,$4,$5,$6)
            RETURNING id, document_id, file_name, file_type, file_size, file_url, uploaded_at, uploaded_by`,
-          [documentId, f.originalname, f.mimetype, f.size, publicUrl, employeeId]
+          [documentId, f.originalname, f.mimetype, f.size, publicUrl, me.id]
         );
         savedFiles.push(row);
       }
@@ -115,7 +160,6 @@ exports.createWithFiles = async (req, res) => {
 
     return res.status(201).json({ message: 'Document created with files', ...result });
   } catch (e) {
-    // best-effort cleanup of uploaded objects if TX failed
     if (uploadedKeys.length) {
       const { deleteKey } = storage;
       await Promise.all(uploadedKeys.map((k) => deleteKey(k)));
@@ -128,20 +172,24 @@ exports.createWithFiles = async (req, res) => {
   }
 };
 
-
 // --- LIST FILES ---
 exports.listFiles = async (req, res) => {
   const documentId = parseInt(req.params.documentId, 10);
+  const me = getMe(req);
   if (!Number.isInteger(documentId)) return res.status(400).json({ error: 'Invalid documentId' });
+  if (!me.id) return res.status(401).json({ error: 'Not Authenticated' });
 
   try {
+    const allowed = await canViewDocument(db, documentId, me.id, me.role === 'ADMIN');
+    if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
     const rows = await db.any(`
       SELECT f.id, f.document_id, f.file_name, f.file_type, f.file_size, f.file_url, f.uploaded_at,
              e.employee_name AS uploader_name, f.uploaded_by
-        FROM document_files f
-        LEFT JOIN employee e ON e.id = f.uploaded_by
-       WHERE f.document_id = $1
-       ORDER BY f.uploaded_at DESC
+      FROM document_files f
+      LEFT JOIN employee e ON e.id = f.uploaded_by
+      WHERE f.document_id = $1
+      ORDER BY f.uploaded_at DESC
     `, [documentId]);
     return res.json(rows);
   } catch (e) {
@@ -150,25 +198,36 @@ exports.listFiles = async (req, res) => {
   }
 };
 
-
-// --- DELETE FILE (optional) ---
+// --- DELETE FILE ---
 exports.removeFile = async (req, res) => {
   const documentId = parseInt(req.params.documentId, 10);
   const fileId = parseInt(req.params.fileId, 10);
+  const me = getMe(req);
+
   if (!Number.isInteger(documentId) || !Number.isInteger(fileId)) {
     return res.status(400).json({ error: 'Invalid ids' });
   }
+  if (!me.id) return res.status(401).json({ error: 'Not Authenticated' });
 
   try {
+    const canView = await canViewDocument(db, documentId, me.id, me.role === 'ADMIN');
+    if (!canView) return res.status(403).json({ error: 'Forbidden' });
+
     const row = await db.oneOrNone(`
-      SELECT id, file_url
-        FROM document_files
-       WHERE id = $1 AND document_id = $2
+      SELECT id, file_url, uploaded_by
+      FROM document_files
+      WHERE id = $1 AND document_id = $2
     `, [fileId, documentId]);
 
     if (!row) return res.status(404).json({ error: 'File not found' });
 
-    // If you want to also delete from R2, convert public URL back to key:
+    // Only the original uploader OR current actionable assignee can delete.
+    const uploaderCan = row.uploaded_by === me.id;
+    const assigneeCan = await isCurrentActionableAssignee(db, documentId, me.id);
+    if (!uploaderCan && !assigneeCan) {
+      return res.status(403).json({ error: 'Not allowed to delete this file' });
+    }
+
     const base = (process.env.R2_PUBLIC_URL_FILE || '').replace(/\/+$/, '');
     const key = row.file_url.startsWith(base) ? row.file_url.substring(base.length + 1) : null;
 
@@ -184,15 +243,18 @@ exports.removeFile = async (req, res) => {
   }
 };
 
-
-// Inside here is the View of Each Document
+// --- DOCUMENT DETAIL (read) ---
 exports.detail = async (req, res) => {
   const docId = parseInt(req.params.id, 10);
-  const me = req.employee?.id;
+  const user = getMe(req);
+  const me = user.id;
   if (!Number.isInteger(docId)) return res.status(400).json({ error: 'Invalid id' });
   if (!me) return res.status(401).json({ error: 'Not Authenticated' });
 
   try {
+    const allowedToView = await canViewDocument(db, docId, me, user.role === 'ADMIN');
+    if (!allowedToView) return res.status(403).json({ error: 'Forbidden' });
+
     const doc = await db.oneOrNone(`
       SELECT d.id, d.title, d.description, d.status, d.created_at, d.updated_at,
              d.document_type_id,
@@ -200,12 +262,12 @@ exports.detail = async (req, res) => {
              s.action, s.forward_mode,
              u.employee_name AS uploader_name, u.id AS uploader_id,
              dep.name AS uploader_department_name
-        FROM documents d
-        LEFT JOIN document_types dt         ON dt.id = d.document_type_id
-        LEFT JOIN document_type_settings s  ON s.document_type_id = d.document_type_id
-        JOIN employee u                     ON u.id = d.uploader_id
-        LEFT JOIN department dep            ON dep.id = u.dp_id
-       WHERE d.id = $1
+      FROM documents d
+      LEFT JOIN document_types dt         ON dt.id = d.document_type_id
+      LEFT JOIN document_type_settings s  ON s.document_type_id = d.document_type_id
+      JOIN employee u                     ON u.id = d.uploader_id
+      LEFT JOIN department dep            ON dep.id = u.dp_id
+      WHERE d.id = $1
     `, [docId]);
     if (!doc) return res.status(404).json({ error: 'Document not found' });
 
@@ -214,20 +276,19 @@ exports.detail = async (req, res) => {
              ds.step_action, ds.status, ds.requested_at, ds.responded_at,
              dp.name AS department_name,
              e.employee_name
-        FROM document_steps ds
-        LEFT JOIN department dp ON dp.id = ds.department_id
-        LEFT JOIN employee   e  ON e.id  = ds.employee_id
-       WHERE ds.document_id = $1
-       ORDER BY ds.sequence ASC, ds.id ASC
+      FROM document_steps ds
+      LEFT JOIN department dp ON dp.id = ds.department_id
+      LEFT JOIN employee   e  ON e.id  = ds.employee_id
+      WHERE ds.document_id = $1
+      ORDER BY ds.sequence ASC, ds.id ASC
     `, [docId]);
 
-    const flowsCount = await db.one(`
-      SELECT COUNT(*)::int AS cnt
-        FROM document_type_flows
-       WHERE document_type_id = $1
-    `, [doc.document_type_id]);
+    const flowsCount = await db.one(
+      `SELECT COUNT(*)::int AS cnt FROM document_type_flows WHERE document_type_id = $1`,
+      [doc.document_type_id]
+    );
 
-    // find my actionable step (respect Step-by-Step queue)
+    // compute my actionable step (same rules as before)
     let myActionable = null;
     if (doc.forward_mode === 'Step by Step') {
       const minPending = steps
@@ -251,7 +312,7 @@ exports.detail = async (req, res) => {
       steps,
       flowsCount: flowsCount.cnt,
       current_actionable_step_id: myActionable?.id ?? null,
-      current_actionable_step_action: myActionable?.step_action ?? null, // APPROVAL | SIGNATURE (for display only)
+      current_actionable_step_action: myActionable?.step_action ?? null, // APPROVAL | SIGNATURE (display)
       canAct,
       canAttach,
     });
@@ -261,11 +322,9 @@ exports.detail = async (req, res) => {
   }
 };
 
-
-// ---------- APPROVE / REJECT ----------
-// ---------- APPROVE / REJECT ----------
+// --- APPROVE / REJECT (assignee only; Admin must be assigned) ---
 exports.decideStep = async (req, res) => {
-  const me = req.employee?.id;
+  const me = getMe(req).id;
   if (!me) return res.status(401).json({ error: 'Not Authenticated' });
 
   const docId = parseInt(req.params.id, 10);
@@ -291,8 +350,8 @@ exports.decideStep = async (req, res) => {
         FROM documents d
         JOIN document_steps ds ON ds.document_id = d.id
         LEFT JOIN document_type_settings s ON s.document_type_id = d.document_type_id
-       WHERE d.id = $1 AND ds.id = $2
-       FOR UPDATE OF d, ds
+        WHERE d.id = $1 AND ds.id = $2
+        FOR UPDATE OF d, ds
       `,
         [docId, stepId]
       );
@@ -302,64 +361,48 @@ exports.decideStep = async (req, res) => {
       if (ctx.action !== 'Ask for Permission') throw new Error('This document type is Read-Only');
       if (ctx.step_status !== 'PENDING') throw new Error('This step is not pending');
 
-      // 1) Update the step
       await t.none(
-        `UPDATE document_steps
-            SET status = $1, responded_at = now()
-          WHERE id = $2`,
+        `UPDATE document_steps SET status = $1, responded_at = now() WHERE id = $2`,
         [decision, stepId]
       );
 
-      // 2) If REJECTED -> short-circuit and set doc to REJECTED
       if (decision === 'REJECTED') {
         await t.none(`UPDATE documents SET status = 'REJECTED', updated_at = now() WHERE id = $1`, [docId]);
         return { document_status: 'REJECTED' };
       }
 
-      // 3) APPROVED path
       if (ctx.forward_mode === 'Step by Step') {
-        // Insert next step if there is one
         await t.oneOrNone(
           `
           WITH nxt AS (
             SELECT sequence, department_id, employee_id, step_action
-              FROM document_type_flows
-             WHERE document_type_id = $1 AND sequence > $2
-             ORDER BY sequence ASC
-             LIMIT 1
+            FROM document_type_flows
+            WHERE document_type_id = $1 AND sequence > $2
+            ORDER BY sequence ASC LIMIT 1
           )
           INSERT INTO document_steps (document_id, sequence, department_id, employee_id, step_action, status)
           SELECT $3, n.sequence, n.department_id, n.employee_id, n.step_action, 'PENDING'
-            FROM nxt n
+          FROM nxt n
           RETURNING id
-        `,
+          `,
           [ctx.document_type_id, ctx.sequence, docId]
         );
       }
-      // for Direct mode, we don’t insert anything here
 
-      // 4) Canonicalize document.status based on current steps
       const agg = await t.one(
         `
         SELECT
           COUNT(*) FILTER (WHERE status = 'PENDING')  AS pending_cnt,
           COUNT(*) FILTER (WHERE status = 'REJECTED') AS rejected_cnt
-        FROM document_steps
-        WHERE document_id = $1
+        FROM document_steps WHERE document_id = $1
       `,
         [docId]
       );
 
       let newStatus;
-      if (Number(agg.rejected_cnt) > 0) {
-        newStatus = 'REJECTED';
-      } else if (Number(agg.pending_cnt) === 0) {
-        newStatus = 'COMPLETED';
-      } else {
-        // keep as 'PENDING' while other steps remain
-        // (If you prefer a visual change, use 'IN_PROGRESS' here and handle it in the app.)
-        newStatus = 'PENDING';
-      }
+      if (Number(agg.rejected_cnt) > 0) newStatus = 'REJECTED';
+      else if (Number(agg.pending_cnt) === 0) newStatus = 'COMPLETED';
+      else newStatus = 'PENDING';
 
       await t.none(`UPDATE documents SET status = $1, updated_at = now() WHERE id = $2`, [newStatus, docId]);
       return { document_status: newStatus };
@@ -372,11 +415,9 @@ exports.decideStep = async (req, res) => {
   }
 };
 
-
-
-// ---------- ADD FILES to existing doc (only when it’s my turn & Ask for Permission) ----------
+// --- ADD FILES to existing doc (assignee only; Admin must be assigned) ---
 exports.addFilesToExisting = async (req, res) => {
-  const me = req.employee?.id;
+  const me = getMe(req).id;
   const docId = parseInt(req.params.id, 10);
   if (!me) return res.status(401).json({ error: 'Not Authenticated' });
   if (!Number.isInteger(docId)) return res.status(400).json({ error: 'Invalid id' });
@@ -389,19 +430,16 @@ exports.addFilesToExisting = async (req, res) => {
   try {
     const saved = await db.tx(async (t) => {
       const header = await t.one(`
-        SELECT d.uploader_id,
-               s.action, s.forward_mode
-          FROM documents d
-          LEFT JOIN document_type_settings s ON s.document_type_id = d.document_type_id
-         WHERE d.id = $1
+        SELECT d.uploader_id, s.action, s.forward_mode
+        FROM documents d
+        LEFT JOIN document_type_settings s ON s.document_type_id = d.document_type_id
+        WHERE d.id = $1
       `, [docId]);
 
       const steps = await t.any(`
         SELECT id, sequence, status, employee_id
-          FROM document_steps
-         WHERE document_id = $1
-         ORDER BY sequence ASC
-         FOR UPDATE
+        FROM document_steps WHERE document_id = $1
+        ORDER BY sequence ASC FOR UPDATE
       `, [docId]);
 
       let actionable = null;
@@ -418,17 +456,13 @@ exports.addFilesToExisting = async (req, res) => {
       if (header.uploader_id === me) throw new Error('Uploader cannot attach at this step');
       if (header.action !== 'Ask for Permission') throw new Error('Attachments not allowed for Read-Only type');
 
-      // Upload each file (include uploaded_by and return uploader_name)
       const resultRows = [];
       for (const f of files) {
         const ext = extOf(f.originalname);
         if (!ALLOWED_EXT.has(ext)) throw new Error(`File type not allowed: ${ext || '(no extension)'}`);
 
         const { key, publicUrl } = await storage.uploadBuffer({
-          documentId: docId,
-          buffer: f.buffer,
-          contentType: f.mimetype,
-          originalname: f.originalname,
+          documentId: docId, buffer: f.buffer, contentType: f.mimetype, originalname: f.originalname,
         });
         uploadedKeys.push(key);
 
@@ -439,11 +473,9 @@ exports.addFilesToExisting = async (req, res) => {
              RETURNING id, document_id, file_name, file_type, file_size, file_url, uploaded_at, uploaded_by
            )
            SELECT ins.*, e.employee_name AS uploader_name
-             FROM ins
-             LEFT JOIN employee e ON e.id = ins.uploaded_by`,
+           FROM ins LEFT JOIN employee e ON e.id = ins.uploaded_by`,
           [docId, f.originalname, f.mimetype, f.size, publicUrl, me]
         );
-
         resultRows.push(row);
       }
       return resultRows;
@@ -451,7 +483,6 @@ exports.addFilesToExisting = async (req, res) => {
 
     return res.status(201).json({ message: 'Files uploaded', files: saved });
   } catch (e) {
-    // best-effort cleanup of uploaded objects if TX failed
     if (uploadedKeys.length) {
       const { deleteKey } = storage;
       await Promise.all(uploadedKeys.map((k) => deleteKey(k)));
@@ -461,38 +492,25 @@ exports.addFilesToExisting = async (req, res) => {
   }
 };
 
-
-// --- LIST READ-ONLY DOCS SHARED TO ME (no duplicates) ---
+// --- READ-ONLY docs shared to me (unchanged behavior) ---
 exports.listShared = async (req, res) => {
-  const me = req.employee?.id;
+  const me = getMe(req).id;
   if (!me) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
     const rows = await db.any(
       `
-      SELECT
-        d.id,
-        d.document_type_id,
-        dt.title AS document_type_title,
-        d.title,
-        d.description,
-        d.status,
-        d.created_at,
-        d.updated_at,
-        u.employee_name AS uploader_name
+      SELECT d.id, d.document_type_id, dt.title AS document_type_title,
+             d.title, d.description, d.status, d.created_at, d.updated_at,
+             u.employee_name AS uploader_name
       FROM documents d
-      JOIN document_type_settings s
-        ON s.document_type_id = d.document_type_id
-      JOIN document_types dt
-        ON dt.id = d.document_type_id
-      LEFT JOIN employee u
-        ON u.id = d.uploader_id
+      JOIN document_type_settings s ON s.document_type_id = d.document_type_id
+      JOIN document_types dt ON dt.id = d.document_type_id
+      LEFT JOIN employee u ON u.id = d.uploader_id
       WHERE s.action = 'Read-Only'
         AND EXISTS (
-          SELECT 1
-            FROM document_type_flows f
-           WHERE f.document_type_id = d.document_type_id
-             AND f.employee_id = $1
+          SELECT 1 FROM document_type_flows f
+          WHERE f.document_type_id = d.document_type_id AND f.employee_id = $1
         )
       ORDER BY d.created_at DESC
       `,
