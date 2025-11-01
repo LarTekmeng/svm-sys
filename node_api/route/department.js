@@ -1,8 +1,11 @@
-/* This is Route*/
+const express = require('express');
+const router = express.Router();
+const controller = require('../controller/departmentController');
 
-const router = require('express').Router();
-const ctrl   = require('../controller/departmentController');
+// GET /api/departments
+router.get('/', controller.all);
 
-router.get('/all', ctrl.all);
+// POST /api/departments
+router.post('/', controller.create);
 
 module.exports = router;
