@@ -204,6 +204,7 @@ class AuthRepository {
     required String password,
     required int departmentID,
     required String employeeID,
+    int? roleId,
     File? profileImage,
   }) async {
     final form = FormData.fromMap({
@@ -212,6 +213,7 @@ class AuthRepository {
       'password': password,
       'dp_id': departmentID.toString(),
       'em_id': employeeID,
+      'role_id': roleId,
       if (profileImage != null)
         'profile_image': await MultipartFile.fromFile(
           profileImage.path,

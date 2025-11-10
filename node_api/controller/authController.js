@@ -66,14 +66,14 @@ function buildEmployeeDto(row, role) {
 exports.register = [
   upload.single('profile_image'),
   async (req, res) => {
-    const { employee_name, email, password, dp_id, em_id } = req.body || {};
+    const { employee_name, email, password, dp_id, em_id, role_id } = req.body || {};
     if (!employee_name || !email || !password || !dp_id || !em_id) {
       return res.status(400).json({ error: 'Missing fields' });
     }
 
     try {
       await db.tx(async (t) => {
-        // Duplicate checks (em_id + email)
+        // 1) Duplicate checks
         const dup = await t.oneOrNone(
           `SELECT 'em_id' AS field FROM employee WHERE em_id = $1
            UNION ALL
@@ -86,48 +86,69 @@ exports.register = [
           throw Object.assign(new Error(msg), { http: 409 });
         }
 
-        // Hash password
+        // 2) Hash
         const hash = await bcrypt.hash(password, 10);
 
-        // Insert as EMPLOYEE by default
+        // 3) Normalize role_id from the form:
+        //    - treat "", null, undefined, "   " as null
+        //    - accept only digits
+        const roleIdFromForm = (typeof role_id === 'string' && /^\d+$/.test(role_id))
+          ? parseInt(role_id, 10)
+          : (Number.isInteger(role_id) ? role_id : null);
+
+        // 4) Resolve fallback EMPLOYEE id if needed
+        let finalRoleId = roleIdFromForm;
+        if (finalRoleId == null) {
+          const fallback = await t.oneOrNone(`SELECT id FROM role WHERE code = 'EMPLOYEE'`);
+          if (!fallback) {
+            throw Object.assign(new Error('Default EMPLOYEE role not found'), { http: 500 });
+          }
+          finalRoleId = fallback.id;
+        } else {
+          // Optional: validate provided role exists
+          const exists = await t.oneOrNone('SELECT 1 FROM role WHERE id = $1', [finalRoleId]);
+          if (!exists) {
+            return res.status(400).json({ error: 'Invalid role_id' });
+          }
+        }
+
+        // 5) Insert (no casting errors now)
         const inserted = await t.one(
           `INSERT INTO employee (employee_name, email, password, dp_id, em_id, role_id)
-           VALUES ($1, $2, $3, $4, $5, (SELECT id FROM role WHERE code = 'EMPLOYEE'))
+           VALUES ($1, $2, $3, $4, $5, $6)
            RETURNING id`,
-          [employee_name, email, hash, dp_id, em_id]
+          [employee_name, email, hash, parseInt(dp_id,10), em_id, finalRoleId]
         );
         const employeeId = inserted.id;
 
-        // Optional profile image
+        // 6) Optional image upload
         if (req.file) {
-          const file      = req.file;
-          const timestamp = Date.now();
-          const key       = `employees/${employeeId}/${timestamp}-${file.originalname}`;
-          await uploadToR2(key, file.buffer, file.mimetype);
+          const f = req.file, ts = Date.now();
+          const key = `employees/${employeeId}/${ts}-${f.originalname}`;
+          await uploadToR2(key, f.buffer, f.mimetype);
           const fileUrl = `${(process.env.R2_PUBLIC_URL_PROFILE || '').replace(/\/+$/, '')}/${key}`;
           await t.none(
             `INSERT INTO employee_images (employee_id, file_name, file_type, file_size_bytes, file_url)
              VALUES ($1, $2, $3, $4, $5)`,
-            [employeeId, file.originalname, file.mimetype, file.size, fileUrl]
+            [employeeId, f.originalname, f.mimetype, f.size, fileUrl]
           );
         }
 
         res.status(201).json({
           message: 'Registered successfully',
-          employee: { id: employeeId, employee_name, email, dp_id, em_id, role: 'EMPLOYEE' },
+          employee: { id: employeeId, employee_name, email, dp_id, em_id, role_id: finalRoleId },
         });
       });
     } catch (e) {
       if (e.http) return res.status(e.http).json({ error: e.message });
-      if (e.code === '23505') {
-        // Fallback unique constraint catch
-        return res.status(409).json({ error: 'Duplicate key (email or em_id)' });
-      }
+      if (e.code === '23505') return res.status(409).json({ error: 'Duplicate key (email or em_id)' });
       console.error('Register error:', e);
       res.status(500).json({ error: 'Server error' });
     }
   },
 ];
+
+
 
 /* =======================================================
    LOGIN

@@ -18,6 +18,7 @@ void main() async {
   final homeRepo       = HomeRepo(baseUrl: baseUrl, authRepo: authRepo );
   final documentRepo = DocumentRepository(baseUrl: baseUrl, authRepo: authRepo);
   final profileRepo = ProfileRepo(baseUrl: baseUrl, authRepo: authRepo);
+  final roleRepo = RoleRepository(baseUrl: baseUrl);
 
   runApp(
     MultiRepositoryProvider(
@@ -29,6 +30,7 @@ void main() async {
         RepositoryProvider<HomeRepo>.value(value: homeRepo),
         RepositoryProvider<DocumentRepository>.value(value: documentRepo),
         RepositoryProvider<ProfileRepo>.value(value: profileRepo,),
+        RepositoryProvider<RoleRepository>.value(value: roleRepo,),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -37,6 +39,7 @@ void main() async {
             create: (ctx) => RegisterBloc(
               depRepo: ctx.read<DepartmentRepository>(),
               authRepo: ctx.read<AuthRepository>(),
+              roleRepo: ctx.read<RoleRepository>(),
             )..add(LoadDepartments()),
           ),
           BlocProvider<AuthLoginBloc>(

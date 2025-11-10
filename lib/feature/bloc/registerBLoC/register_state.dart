@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:online_doc_savimex/app_import.dart';
+import '../../model/role_mdl.dart';
 
 abstract class RegisterState extends Equatable {
   @override
@@ -15,6 +16,13 @@ class DepartmentsLoadSuccess extends RegisterState {
 
   @override
   List<Object?> get props => [departments];
+}
+
+class RoleLoadSuccess extends RegisterState {
+  final List<Role> roles;
+  RoleLoadSuccess(this.roles);
+  @override
+  List<Object?> get props => [roles];
 }
 
 class RegisterSuccess extends RegisterState {}

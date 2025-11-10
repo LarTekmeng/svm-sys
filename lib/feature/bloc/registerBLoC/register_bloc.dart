@@ -2,15 +2,17 @@ import 'package:online_doc_savimex/app_import.dart';
 class RegisterBloc extends Bloc<RegisterEvent, RegisterState> {
   final DepartmentRepository _depRepo;
   final AuthRepository _authRepo;
+  final RoleRepository _roleRepo;
 
   RegisterBloc({
     required DepartmentRepository depRepo,
     required AuthRepository authRepo,
-  })  : _depRepo = depRepo,
-        _authRepo = authRepo,
+    required RoleRepository roleRepo,
+  })  : _depRepo = depRepo, _authRepo = authRepo, _roleRepo = roleRepo,
         super(RegisterInitial()) {
     on<LoadDepartments>(_onLoadDepartments);
     on<RegisterRequested>(_onRegisterSubmitted);
+    on<LoadRoles>(_onLoadRoles);
   }
 
   Future<void> _onLoadDepartments(
@@ -33,12 +35,6 @@ class RegisterBloc extends Bloc<RegisterEvent, RegisterState> {
     emit(RegisterLoading());
     try {
       await _authRepo.registerEmployee(
-        // event.employeeName,
-        // event.email,
-        // event.password,
-        // event.departmentID,
-        // event.employeeID,
-        // profileImage : event.profileImage,
         name: event.employeeName,
         email: event.email,
         password: event.password,
@@ -50,5 +46,13 @@ class RegisterBloc extends Bloc<RegisterEvent, RegisterState> {
     } catch (e) {
       emit(RegisterFailure(e.toString()));
     }
+  }
+  Future<void> _onLoadRoles(
+      LoadRoles event,
+      Emitter<RegisterState> emit,
+      ) async {
+    // You can choose whether to emit a loading state or not; keeping UI snappy:
+    final roles = await _roleRepo.fetchRole();
+    emit(RoleLoadSuccess(roles));                       // <-- this feeds the UI
   }
 }

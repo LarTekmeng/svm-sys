@@ -67,6 +67,7 @@ export 'package:online_doc_savimex/feature/repositories/department_repo.dart';
 export 'package:online_doc_savimex/feature/repositories/doctype_repo.dart';
 export 'package:online_doc_savimex/feature/repositories/document_repo.dart';
 export 'package:online_doc_savimex/feature/repositories/home_repo.dart';
+export 'package:online_doc_savimex/feature/repositories/role_repo.dart';
 /* ===== */
 
 /*Models*/
@@ -74,6 +75,7 @@ export 'package:online_doc_savimex/feature/model/department_mdl.dart';
 export 'package:online_doc_savimex/feature/model/document_mdl.dart';
 export 'package:online_doc_savimex/feature/model/document_type_mdl.dart';
 export 'package:online_doc_savimex/feature/model/employee_mdl.dart';
+export 'package:online_doc_savimex/feature/model/role_mdl.dart';
 /* ===== */
 
 

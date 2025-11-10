@@ -111,6 +111,7 @@ app.use('/api/documents', require('./route/document'));
 app.use('/api/departments', require('./route/department'));
 app.use('/api/home', require('./route/home'));
 app.use('/api/me', meRoutes);
+app.use('/api/role', require('./route/role'));
 
 // global error fallback (if you `next(err)`)
 app.use((err, req, res, next) => {

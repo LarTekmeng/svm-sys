@@ -1,8 +1,10 @@
 import 'dart:io';
-import 'dart:developer' as dev; // for dev.log
-import 'package:flutter/foundation.dart'; // for debugPrint
+import 'dart:developer' as dev;
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:online_doc_savimex/app_import.dart';
+
+import '../../model/role_mdl.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -20,17 +22,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   File? _profileImage;
   int? _selectedDeptId;
+  int? _selectedRoleId;
 
-  bool _defaultDeptSet = false; // prevent resetting selection on every rebuild
+  bool _defaultDeptSet = false;
+  bool _defaultRoleSet = false;
+
+  // Caches so we don't lose data on state switches
+  List<Department> _depts = [];
+  List<Role> _roles = [];
 
   @override
   void initState() {
     super.initState();
-    debugPrint('[Register] initState() → dispatch LoadDepartments');
+    debugPrint('[Register] initState() → dispatch LoadDepartments & LoadRoles');
     try {
-      context.read<RegisterBloc>().add(LoadDepartments());
+      final bloc = context.read<RegisterBloc>();
+      bloc.add(LoadDepartments());
+      bloc.add(LoadRoles());
     } catch (e, st) {
-      dev.log('[Register] ERROR dispatching LoadDepartments', error: e, stackTrace: st);
+      dev.log('[Register] ERROR dispatching initial loads', error: e, stackTrace: st);
     }
   }
 
@@ -53,18 +63,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
       debugPrint('[Register] Department not selected → abort submit');
       return;
     }
+    if (_selectedRoleId == null) {
+      debugPrint('[Register] Role not selected → abort submit');
+      return;
+    }
 
-    // Mask password length only (avoid printing secrets)
     final masked = '*' * _passCtrl.text.length;
 
-    dev.log('[Register] Dispatch RegisterRequested', name: 'register.submit', error: {
-      'name'        : _nameCtrl.text.trim(),
-      'email'       : _emailCtrl.text.trim(),
-      'passwordLen' : masked.length,
-      'departmentId': _selectedDeptId,
-      'employeeId'  : _empIdCtrl.text.trim(),
-      'hasImage'    : _profileImage != null,
-    });
+    dev.log('[Register] Dispatch RegisterRequested',
+        name: 'register.submit',
+        error: {
+          'name'        : _nameCtrl.text.trim(),
+          'email'       : _emailCtrl.text.trim(),
+          'passwordLen' : masked.length,
+          'departmentId': _selectedDeptId,
+          'roleId'      : _selectedRoleId,
+          'employeeId'  : _empIdCtrl.text.trim(),
+          'hasImage'    : _profileImage != null,
+        });
 
     try {
       context.read<RegisterBloc>().add(
@@ -74,6 +90,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           _passCtrl.text,
           _selectedDeptId!,
           _empIdCtrl.text.trim(),
+          roleId: _selectedRoleId,
           profileImage: _profileImage,
         ),
       );
@@ -103,7 +120,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return BlocListener<RegisterBloc, RegisterState>(
       listener: (context, state) {
         debugPrint('[Register] Listener state: ${state.runtimeType}');
-        if (state is RegisterSuccess) {
+
+        if (state is DepartmentsLoadSuccess) {
+          setState(() {
+            _depts = state.departments;
+            if (!_defaultDeptSet && _depts.isNotEmpty) {
+              _selectedDeptId ??= _depts.first.id;
+              _defaultDeptSet = true;
+              debugPrint('[Register] Default dept selected: id=$_selectedDeptId (${_depts.first.name})');
+            }
+          });
+        } else if (state is RoleLoadSuccess) {
+          setState(() {
+            _roles = state.roles;
+            if (!_defaultRoleSet && _roles.isNotEmpty) {
+              _selectedRoleId ??= _roles.first.id;
+              _defaultRoleSet = true;
+              debugPrint('[Register] Default role selected: id=$_selectedRoleId (${_roles.first.roleCode})');
+            }
+          });
+        } else if (state is RegisterSuccess) {
           debugPrint('[Register] RegisterSuccess → go LoginScreen');
           Navigator.pushReplacement(
             context,
@@ -119,30 +155,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
         appBar: AppBar(title: const Text('Create new employee')),
         body: BlocBuilder<RegisterBloc, RegisterState>(
           buildWhen: (prev, curr) {
-            // Always log transitions
             debugPrint('[Register] buildWhen: ${prev.runtimeType} → ${curr.runtimeType}');
             return true;
           },
           builder: (context, state) {
-            if (state is RegisterLoading) {
-              debugPrint('[Register] UI: RegisterLoading');
+            if (state is RegisterLoading && _depts.isEmpty && _roles.isEmpty) {
               return const Center(child: CircularProgressIndicator());
             }
 
-            // pull departments list out of state
-            List<Department> depts = [];
-            if (state is DepartmentsLoadSuccess) {
-              depts = state.departments;
-              debugPrint('[Register] DepartmentsLoadSuccess: count=${depts.length}');
-              if (!_defaultDeptSet && depts.isNotEmpty) {
-                // set default only once to avoid flipping selection on rebuilds
-                _selectedDeptId ??= depts.first.id;
-                _defaultDeptSet = true;
-                debugPrint('[Register] Default dept selected: id=$_selectedDeptId (${depts.first.name})');
-              }
-            } else {
-              debugPrint('[Register] State not DepartmentsLoadSuccess (got ${state.runtimeType})');
-            }
+            // Use cached lists so we always have both dropdowns populated
+            final depts = _depts;
+            final roles = _roles;
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -151,14 +174,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // avatar picker
                     Center(
                       child: GestureDetector(
                         onTap: _pickImage,
                         child: CircleAvatar(
                           radius: 48,
-                          backgroundImage:
-                          _profileImage != null ? FileImage(_profileImage!) : null,
+                          backgroundImage: _profileImage != null ? FileImage(_profileImage!) : null,
                           child: _profileImage == null
                               ? const Icon(Icons.person, size: 48)
                               : null,
@@ -167,7 +188,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // DEPARTMENT dropdown (int IDs)
+                    // Department dropdown
                     DropdownButtonFormField<int>(
                       key: const ValueKey('dept_dropdown'),
                       value: _selectedDeptId,
@@ -182,42 +203,49 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         setState(() => _selectedDeptId = id);
                         debugPrint('[Register] Dept changed → $_selectedDeptId');
                       },
-                      validator: (_) =>
-                      _selectedDeptId == null ? 'Please select one' : null,
+                      validator: (_) => _selectedDeptId == null ? 'Please select one' : null,
                     ),
 
                     const SizedBox(height: 16),
+
+                    // Role dropdown
+                    DropdownButtonFormField<int>(
+                      key: const ValueKey('role_dropdown'),
+                      value: _selectedRoleId,
+                      decoration: const InputDecoration(labelText: 'Role'),
+                      items: roles.map((r) {
+                        return DropdownMenuItem<int>(
+                          value: r.id,
+                          child: Text(r.roleCode.isEmpty ? 'Role ${r.id}' : r.roleCode),
+                        );
+                      }).toList(),
+                      onChanged: (id) {
+                        setState(() => _selectedRoleId = id);
+                        debugPrint('[Register] Role changed → $_selectedRoleId');
+                      },
+                      validator: (_) => _selectedRoleId == null ? 'Please select one' : null,
+                    ),
+
+                    const SizedBox(height: 16),
+
                     TextFormField(
                       controller: _empIdCtrl,
                       decoration: const InputDecoration(labelText: 'Employee ID'),
-                      validator: (v) {
-                        final ok = v != null && v.isNotEmpty;
-                        if (!ok) debugPrint('[Register] Validation fail: Employee ID');
-                        return ok ? null : 'Enter employee ID';
-                      },
+                      validator: (v) => (v != null && v.isNotEmpty) ? null : 'Enter employee ID',
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _nameCtrl,
                       decoration: const InputDecoration(labelText: 'Name'),
-                      validator: (v) {
-                        final ok = v != null && v.isNotEmpty;
-                        if (!ok) debugPrint('[Register] Validation fail: Name');
-                        return ok ? null : 'Enter name';
-                      },
+                      validator: (v) => (v != null && v.isNotEmpty) ? null : 'Enter name',
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _emailCtrl,
                       decoration: const InputDecoration(labelText: 'Email'),
                       validator: (v) {
-                        if (v == null || v.isEmpty) {
-                          debugPrint('[Register] Validation fail: Email empty');
-                          return 'Enter email';
-                        }
-                        final ok = RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v);
-                        if (!ok) debugPrint('[Register] Validation fail: Email invalid → $v');
-                        return ok ? null : 'Invalid email';
+                        if (v == null || v.isEmpty) return 'Enter email';
+                        return RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v) ? null : 'Invalid email';
                       },
                     ),
                     const SizedBox(height: 16),
@@ -225,17 +253,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _passCtrl,
                       decoration: const InputDecoration(labelText: 'Password'),
                       obscureText: true,
-                      validator: (v) {
-                        final ok = v != null && v.length >= 6;
-                        if (!ok) debugPrint('[Register] Validation fail: Password too short');
-                        return ok ? null : 'Min 6 chars';
-                      },
+                      validator: (v) => (v != null && v.length >= 6) ? null : 'Min 6 chars',
                     ),
                     const SizedBox(height: 24),
+
                     ElevatedButton(
                       onPressed: _onSubmit,
                       child: const Text('Register'),
                     ),
+
                     TextButton(
                       onPressed: () {
                         debugPrint('[Register] Go to LoginScreen via footer button');
