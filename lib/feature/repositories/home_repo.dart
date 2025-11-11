@@ -132,9 +132,22 @@ class HomeRepo {
       )
           .listen(
             (evt) {
-          if (!_realtime.isClosed) {
-            _realtime.add(null);
-          }
+              final type = (evt.event ?? '').trim();
+              if(type.isNotEmpty && type != 'document') return;
+
+              final data = evt.data?.trim();
+              if(data == null || data.isEmpty) return;
+              if(data.startsWith(':')) return;
+
+              try {
+                final payload = jsonDecode(data);
+                if(payload is Map<String, dynamic> && payload['id'] != null){
+                  if(!_realtime.isClosed) _realtime.add(null);
+                }
+              }
+              catch (_){
+
+              }
         },
         onError: (e, st) {
           _scheduleRetry(start);

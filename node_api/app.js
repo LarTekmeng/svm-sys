@@ -78,7 +78,7 @@ app.get('/api/home/stream', requireAuth, (req, res) => {
     console.log('LISTEN documents_channel');
 
     notifyClient.on('notification', (msg) => {
-      const frame = `data: ${msg.payload}\n\n`;
+      const frame = `event: document\n` + `data: ${msg.payload}\n\n`;
       // Iterate the actual client objects so we can delete the right one
       for (const client of Array.from(SSE_CLIENTS)) {
         try {
