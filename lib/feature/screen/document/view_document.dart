@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
@@ -10,6 +11,7 @@ import 'package:online_doc_savimex/feature/screen/document/widget/step.dart';
 import 'package:online_doc_savimex/feature/widget/color.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:pdfx/pdfx.dart';
 import 'package:saver_gallery/saver_gallery.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -37,6 +39,10 @@ class _DocumentView extends StatefulWidget {
 
 class _DocumentViewState extends State<_DocumentView> {
   bool _shouldRefresh = false;
+
+  // -----------------------------
+  // Type helpers
+  // -----------------------------
   bool _isImage(DocumentFile f) {
     final t = (f.fileType).toLowerCase();
     if (t.startsWith('image/')) return true;
@@ -51,6 +57,27 @@ class _DocumentViewState extends State<_DocumentView> {
         n.endsWith('.heic');
   }
 
+  bool _isPdf(DocumentFile f) {
+    final t = (f.fileType).toLowerCase();
+    final n = (f.fileName).toLowerCase();
+    return t == 'application/pdf' || n.endsWith('.pdf');
+  }
+
+  /// We will mark stamped copies by naming them *_signed.png.
+  bool _isSigned(DocumentFile f) {
+    final n = (f.fileName).toLowerCase();
+    return n.endsWith('_signed.png');
+  }
+
+  /// Only show Signature when backend step_action == 'SIGNATURE' and user can act.
+  bool _canSignature(DocumentDetail d) {
+    final a = (d.currentActionableStepAction ?? '').toUpperCase();
+    return d.canAct == true && a == 'SIGNATURE';
+  }
+
+  // -----------------------------
+  // Common UI helpers
+  // -----------------------------
   Future<void> _openUrl(BuildContext context, String url) async {
     final uri = Uri.parse(url);
     if (!await canLaunchUrl(uri)) {
@@ -66,6 +93,76 @@ class _DocumentViewState extends State<_DocumentView> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  // -----------------------------
+  // Attachment actions (with Signature)
+  // -----------------------------
+  Future<void> _onAttachmentPressed(DocumentDetail d, DocumentFile f) async {
+    final isImg = _isImage(f);
+    final isPdf = _isPdf(f);
+    final canSign = _canSignature(d) && (isImg || isPdf);
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder:
+          (_) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (canSign)
+                  ListTile(
+                    leading: const Icon(Icons.draw),
+                    title: const Text('Signature'),
+                    subtitle: Text(
+                      isImg ? 'Stamp on this image' : 'Stamp on this PDF page',
+                    ),
+                    onTap: () => Navigator.pop(context, 'signature'),
+                  ),
+                if (isImg)
+                  ListTile(
+                    leading: const Icon(Icons.photo_library),
+                    title: const Text('Save to Photos/Gallery'),
+                    onTap: () => Navigator.pop(context, 'gallery'),
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.folder),
+                  title: const Text('Save to Files'),
+                  onTap: () => Navigator.pop(context, 'files'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.open_in_new),
+                  title: const Text('Open in viewer'),
+                  onTap: () => Navigator.pop(context, 'open'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.close),
+                  title: const Text('Cancel'),
+                  onTap: () => Navigator.pop(context, 'cancel'),
+                ),
+                const SizedBox(height: 4),
+              ],
+            ),
+          ),
+    );
+
+    if (choice == null || choice == 'cancel') return;
+
+    switch (choice) {
+      case 'signature':
+        await _openSignatureStampSheet(documentId: d.id, file: f, isPdf: isPdf);
+        return;
+      case 'gallery':
+      case 'files':
+        await _onDownloadPressed(f); // reuse existing downloader
+        return;
+      case 'open':
+        await _openUrl(context, f.fileUrl);
+        return;
+    }
+  }
+
+  // -----------------------------
+  // Existing download flow (kept)
+  // -----------------------------
   Future<void> _onDownloadPressed(DocumentFile f) async {
     // On web/desktop, let the browser handle the download.
     if (kIsWeb) {
@@ -75,7 +172,6 @@ class _DocumentViewState extends State<_DocumentView> {
 
     final isImg = _isImage(f);
 
-    // Build the choices based on type
     final choice = await showModalBottomSheet<String>(
       context: context,
       builder:
@@ -107,7 +203,6 @@ class _DocumentViewState extends State<_DocumentView> {
 
     if (choice == null || choice == 'cancel') return;
 
-    // Download bytes (in-memory is fine for typical office/media files)
     final bytes = await _fetchBytes(f.fileUrl);
     if (bytes == null) return;
 
@@ -127,10 +222,86 @@ class _DocumentViewState extends State<_DocumentView> {
       return;
     }
 
-    // Default: Save to Files (Android SAF / iOS Files)
     await _saveToFiles(bytes, fileName);
   }
 
+  // -----------------------------
+  // Signature stamping bottom sheet
+  // -----------------------------
+  Future<void> _openSignatureStampSheet({
+    required int documentId,
+    required DocumentFile file,
+    required bool isPdf,
+  }) async {
+    try {
+      // 1) Base image (image directly, or PDF->PNG first page)
+      Uint8List? baseBytes;
+      if (!isPdf) {
+        baseBytes = await _fetchBytes(file.fileUrl);
+      } else {
+        baseBytes = await _renderPdfPageToPng(file.fileUrl, pageIndex: 1);
+      }
+      if (baseBytes == null) {
+        _snack('Failed to open the file for signature.');
+        return;
+      }
+
+      // 2) Let user choose their signature PNG/JPG from device
+      final sigBytes = await _pickSignatureImage();
+      if (sigBytes == null) {
+        _snack('No signature selected.');
+        return;
+      }
+
+      // 3) Show full-screen sheet to position/scale signature
+      final stamped = await showModalBottomSheet<Uint8List>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.black87,
+        builder:
+            (_) => _SignatureStampSheet(
+              baseImageBytes: baseBytes!,
+              signaturePngBytes: sigBytes,
+            ),
+      );
+
+      // 4) Upload stamped PNG as a new attachment
+      if (stamped != null) {
+        final baseName = p.basenameWithoutExtension(file.fileName);
+        final outName = '${baseName}_signed.png';
+        final payload = UploadFilePayload(
+          name: outName,
+          bytes: stamped,
+          mime: 'image/png',
+        );
+        if (!mounted) return;
+        context.read<ViewBloc>().add(ViewUploadPicked([payload]));
+      }
+    } catch (e) {
+      _snack('Signature failed: $e');
+    }
+  }
+
+  // User chooses signature image (PNG/JPG) – no backend changes required
+  Future<Uint8List?> _pickSignatureImage() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      withData: true,
+      type: FileType.custom,
+      allowedExtensions: ['png', 'jpg', 'jpeg'],
+    );
+    if (result == null || result.files.isEmpty) return null;
+    final f = result.files.first;
+    if (f.bytes != null) return f.bytes!;
+    if (f.path != null) {
+      return await File(f.path!).readAsBytes();
+    }
+    return null;
+  }
+
+  // -----------------------------
+  // Network / file helpers
+  // -----------------------------
   Future<Uint8List?> _fetchBytes(String url) async {
     try {
       final r = await http.get(Uri.parse(url));
@@ -181,6 +352,37 @@ class _DocumentViewState extends State<_DocumentView> {
     return '';
   }
 
+  // -----------------------------
+  // PDF first-page renderer (PNG)
+  // -----------------------------
+  Future<Uint8List?> _renderPdfPageToPng(
+    String url, {
+    int pageIndex = 1,
+    int scale = 2,
+  }) async {
+    try {
+      final bytes = await _fetchBytes(url);
+      if (bytes == null) return null;
+      final doc = await PdfDocument.openData(bytes);
+      final idx = pageIndex.clamp(1, doc.pagesCount);
+      final page = await doc.getPage(idx);
+      final img = await page.render(
+        width: (page.width * scale).toDouble(),
+        height: (page.height * scale).toDouble(),
+        format: PdfPageImageFormat.png,
+        backgroundColor: '#FFFFFFFF',
+      );
+      await page.close();
+      await doc.close();
+      return img?.bytes;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // -----------------------------
+  // BLoC + UI
+  // -----------------------------
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<ViewBloc, ViewState>(
@@ -217,10 +419,22 @@ class _DocumentViewState extends State<_DocumentView> {
             );
           case ViewStatus.loaded:
             final d = state.detail!;
+            final allFiles = state.files;
+            final signedFiles = allFiles.where(_isSigned).toList();
+            final originalFiles = allFiles.where((f) => !_isSigned(f)).toList();
+
+            final origImages = originalFiles.where(_isImage).toList();
+            final origOthers =
+                originalFiles.where((f) => !_isImage(f)).toList();
+
+            final signedImages = signedFiles.where(_isImage).toList();
+            final signedOthers =
+                signedFiles.where((f) => !_isImage(f)).toList();
+
             return PopScope(
               canPop: false,
-              onPopInvokedWithResult: (bool didPop, Object? result){
-                if(didPop) return;
+              onPopInvokedWithResult: (bool didPop, Object? result) {
+                if (didPop) return;
                 Navigator.of(context).pop(_shouldRefresh);
               },
               child: Scaffold(
@@ -236,7 +450,7 @@ class _DocumentViewState extends State<_DocumentView> {
                           context.read<ViewBloc>().add(const ViewRefreshed()),
                   child: ListView(
                     children: [
-                      // Header (From + Date + Approve/Reject when allowed)
+                      // Header
                       DocumentHeader(
                         uploaderName: d.uploaderName,
                         uploaderDepartmentName: d.uploaderDepartmentName,
@@ -256,14 +470,14 @@ class _DocumentViewState extends State<_DocumentView> {
                                 ),
                       ),
 
-                      // Steps (only for Step by Step)
+                      // Steps
                       DocumentSteps(
                         forwardMode: d.forwardMode,
                         flowsCount: d.flowsCount,
                         steps: d.steps,
                       ),
 
-                      // Your document form / content
+                      // Main content
                       Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -284,7 +498,9 @@ class _DocumentViewState extends State<_DocumentView> {
                                 const SizedBox(height: 8),
                                 Text(
                                   d.description,
-                                  style: TextStyle(color: AppColors.white),
+                                  style: const TextStyle(
+                                    color: AppColors.white,
+                                  ),
                                 ),
                               ],
                             ),
@@ -292,7 +508,7 @@ class _DocumentViewState extends State<_DocumentView> {
                         ),
                       ),
 
-                      // Attachments
+                      // Original Attachments
                       Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -306,38 +522,195 @@ class _DocumentViewState extends State<_DocumentView> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Attachments',
+                                  'Original attachments',
                                   style: Theme.of(context).textTheme.titleMedium
                                       ?.copyWith(color: AppColors.white),
                                 ),
                                 const SizedBox(height: 8),
-                                if (state.files.isEmpty)
+                                if (originalFiles.isEmpty)
                                   const Text(
                                     'No files',
                                     style: TextStyle(color: AppColors.white),
                                   ),
-                                Builder(
-                                  builder: (_) {
-                                    final images =
-                                        state.files.where(_isImage).toList();
-                                    if (images.isEmpty) {
-                                      return const SizedBox.shrink();
-                                    }
-                                    return GridView.builder(
+
+                                // Image grid
+                                if (origImages.isNotEmpty)
+                                  GridView.builder(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    gridDelegate:
+                                        const SliverGridDelegateWithFixedCrossAxisCount(
+                                          crossAxisCount: 3,
+                                          crossAxisSpacing: 8,
+                                          mainAxisSpacing: 8,
+                                          childAspectRatio: 1,
+                                        ),
+                                    itemCount: origImages.length,
+                                    itemBuilder: (_, i) {
+                                      final f = origImages[i];
+                                      return GestureDetector(
+                                        onTap: () => _onAttachmentPressed(d, f),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          child: Stack(
+                                            fit: StackFit.expand,
+                                            children: [
+                                              Image.network(
+                                                f.fileUrl,
+                                                fit: BoxFit.cover,
+                                                errorBuilder:
+                                                    (_, __, ___) =>
+                                                        const Center(
+                                                          child: Icon(
+                                                            Icons.broken_image,
+                                                          ),
+                                                        ),
+                                              ),
+                                              Align(
+                                                alignment:
+                                                    Alignment.bottomCenter,
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 4,
+                                                      ),
+                                                  color: Colors.black54,
+                                                  child: Column(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Text(
+                                                        f.fileName,
+                                                        maxLines: 1,
+                                                        overflow:
+                                                            TextOverflow
+                                                                .ellipsis,
+                                                        style: TextStyle(
+                                                          color:
+                                                              AppColors.white,
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                      if (f.uploaderName !=
+                                                              null &&
+                                                          f.uploaderName!
+                                                              .trim()
+                                                              .isNotEmpty)
+                                                        Text(
+                                                          'From: ${f.uploaderName}',
+                                                          maxLines: 1,
+                                                          overflow:
+                                                              TextOverflow
+                                                                  .ellipsis,
+                                                          style: const TextStyle(
+                                                            color:
+                                                                Colors.white70,
+                                                            fontSize: 11,
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+
+                                const SizedBox(height: 12),
+
+                                // Non-image originals
+                                ...origOthers.map((f) {
+                                  final kb = (f.fileSize / 1024)
+                                      .toStringAsFixed(1);
+                                  return ListTile(
+                                    dense: true,
+                                    leading: Icon(
+                                      Icons.insert_drive_file,
+                                      color: AppColors.white,
+                                    ),
+                                    title: Text(
+                                      f.fileName,
+                                      style: TextStyle(color: AppColors.white),
+                                    ),
+                                    subtitle: Text(
+                                      '${f.fileType} · ${kb} KB'
+                                      '${(f.uploaderName != null && f.uploaderName!.trim().isNotEmpty) ? ' · From: ${f.uploaderName}' : ''}',
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                    trailing: IconButton(
+                                      onPressed:
+                                          () => _onAttachmentPressed(d, f),
+                                      icon: Icon(
+                                        Icons.more_horiz,
+                                        color: AppColors.white,
+                                      ),
+                                      tooltip: 'Actions',
+                                    ),
+                                    onTap: () => _onAttachmentPressed(d, f),
+                                  );
+                                }),
+                                const SizedBox(height: 4),
+                                if (state.uploadBusy)
+                                  const LinearProgressIndicator(minHeight: 2),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Signed attachments (separate section)
+                      if (signedFiles.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          child: Card(
+                            color: AppColors.card,
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Signed attachments',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(color: Colors.greenAccent),
+                                  ),
+                                  const SizedBox(height: 8),
+
+                                  if (signedImages.isNotEmpty)
+                                    GridView.builder(
                                       shrinkWrap: true,
-                                      physics: NeverScrollableScrollPhysics(),
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
                                       gridDelegate:
-                                          SliverGridDelegateWithFixedCrossAxisCount(
+                                          const SliverGridDelegateWithFixedCrossAxisCount(
                                             crossAxisCount: 3,
                                             crossAxisSpacing: 8,
                                             mainAxisSpacing: 8,
                                             childAspectRatio: 1,
                                           ),
-                                      itemCount: images.length,
+                                      itemCount: signedImages.length,
                                       itemBuilder: (_, i) {
-                                        final f = images[i];
+                                        final f = signedImages[i];
                                         return GestureDetector(
-                                          onTap: () => _onDownloadPressed(f),
+                                          onTap:
+                                              () => _onAttachmentPressed(d, f),
                                           child: ClipRRect(
                                             borderRadius: BorderRadius.circular(
                                               8,
@@ -352,7 +725,8 @@ class _DocumentViewState extends State<_DocumentView> {
                                                       (_, __, ___) =>
                                                           const Center(
                                                             child: Icon(
-                                                              Icons.broken_image,
+                                                              Icons
+                                                                  .broken_image,
                                                             ),
                                                           ),
                                                 ),
@@ -360,48 +734,21 @@ class _DocumentViewState extends State<_DocumentView> {
                                                   alignment:
                                                       Alignment.bottomCenter,
                                                   child: Container(
-                                                    padding: EdgeInsets.symmetric(
-                                                      horizontal: 6,
-                                                      vertical: 4,
-                                                    ),
-                                                    color: Colors.black54,
-                                                    child: Column(
-                                                      mainAxisSize:
-                                                          MainAxisSize.min,
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .center,
-                                                      children: [
-                                                        Text(
-                                                          f.fileName,
-                                                          maxLines: 1,
-                                                          overflow:
-                                                              TextOverflow
-                                                                  .ellipsis,
-                                                          style: TextStyle(
-                                                            color:
-                                                                AppColors.white,
-                                                            fontSize: 12,
-                                                          ),
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 6,
+                                                          vertical: 4,
                                                         ),
-                                                        if (f.uploaderName !=
-                                                                null &&
-                                                            f.uploaderName!
-                                                                .trim()
-                                                                .isNotEmpty)
-                                                          Text(
-                                                            'From: ${f.uploaderName}',
-                                                            maxLines: 1,
-                                                            overflow:
-                                                                TextOverflow
-                                                                    .ellipsis,
-                                                            style: TextStyle(
-                                                              color:
-                                                                  Colors.white70,
-                                                              fontSize: 11,
-                                                            ),
-                                                          ),
-                                                      ],
+                                                    color: Colors.black54,
+                                                    child: Text(
+                                                      f.fileName,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 12,
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
@@ -410,52 +757,50 @@ class _DocumentViewState extends State<_DocumentView> {
                                           ),
                                         );
                                       },
-                                    );
-                                  },
-                                ),
+                                    ),
 
-                                const SizedBox(height: 12),
+                                  const SizedBox(height: 12),
 
-                                ...state.files.where((f) => !_isImage(f)).map((
-                                  f,
-                                ) {
-                                  final kb = (f.fileSize / 1024).toStringAsFixed(
-                                    1,
-                                  );
-                                  return ListTile(
-                                    dense: true,
-                                    leading: Icon(
-                                      Icons.insert_drive_file,
-                                      color: AppColors.white,
-                                    ),
-                                    title: Text(
-                                      f.fileName,
-                                      style: TextStyle(color: AppColors.white),
-                                    ),
-                                    subtitle: Text(
-                                      '${f.fileType} · ${kb} KB'
-                                      '${(f.uploaderName != null && f.uploaderName!.trim().isNotEmpty) ? ' · From: ${f.uploaderName}' : ''}',
-                                      style: TextStyle(color: Colors.white70),
-                                    ),
-                                    trailing: IconButton(
-                                      onPressed: () => _onDownloadPressed(f),
-                                      icon: Icon(
-                                        Icons.download,
-                                        color: AppColors.white,
+                                  ...signedOthers.map((f) {
+                                    final kb = (f.fileSize / 1024)
+                                        .toStringAsFixed(1);
+                                    return ListTile(
+                                      dense: true,
+                                      leading: const Icon(
+                                        Icons.verified,
+                                        color: Colors.greenAccent,
                                       ),
-                                      tooltip: 'Open / Download',
-                                    ),
-                                    onTap: () => _onDownloadPressed(f),
-                                  );
-                                }).toList(),
-                                const SizedBox(height: 4),
-                                if (state.uploadBusy)
-                                  const LinearProgressIndicator(minHeight: 2),
-                              ],
+                                      title: Text(
+                                        f.fileName,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        '${f.fileType} · ${kb} KB'
+                                        '${(f.uploaderName != null && f.uploaderName!.trim().isNotEmpty) ? ' · From: ${f.uploaderName}' : ''}',
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                      trailing: IconButton(
+                                        onPressed:
+                                            () => _onAttachmentPressed(d, f),
+                                        icon: const Icon(
+                                          Icons.more_horiz,
+                                          color: Colors.white,
+                                        ),
+                                        tooltip: 'Actions',
+                                      ),
+                                      onTap: () => _onAttachmentPressed(d, f),
+                                    );
+                                  }),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
+
                       const SizedBox(height: 100),
                     ],
                   ),
@@ -492,6 +837,9 @@ class _DocumentViewState extends State<_DocumentView> {
     );
   }
 
+  // -----------------------------
+  // Upload picker (same as before)
+  // -----------------------------
   Future<void> _pickAndDispatchFiles(BuildContext context) async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
@@ -502,7 +850,6 @@ class _DocumentViewState extends State<_DocumentView> {
     final files = <UploadFilePayload>[];
 
     for (final f in result.files) {
-      // 1) Get bytes: prefer in-memory; else read from disk (mobile/desktop)
       List<int>? bytes = f.bytes; // Uint8List implements List<int>
       if (bytes == null && f.path != null) {
         try {
@@ -513,7 +860,6 @@ class _DocumentViewState extends State<_DocumentView> {
       }
       if (bytes == null) continue;
 
-      // 2) Determine MIME reliably (don’t rely on PlatformFile.mimeType)
       final mime =
           lookupMimeType(f.path ?? f.name, headerBytes: bytes) ??
           'application/octet-stream';
@@ -534,3 +880,169 @@ class _DocumentViewState extends State<_DocumentView> {
     return '$y-$m-$d $hh:$mm';
   }
 }
+
+// ===============================================================
+// Bottom-sheet widget for placing the signature
+// ===============================================================
+class _SignatureStampSheet extends StatefulWidget {
+  final Uint8List baseImageBytes;
+  final Uint8List signaturePngBytes;
+  const _SignatureStampSheet({
+    required this.baseImageBytes,
+    required this.signaturePngBytes,
+  });
+
+  @override
+  State<_SignatureStampSheet> createState() => _SignatureStampSheetState();
+}
+
+class _SignatureStampSheetState extends State<_SignatureStampSheet> {
+  final _stackKey = GlobalKey();
+  Offset _sigPos = const Offset(40, 40);
+  double _sigScale = 1.0;
+  ui.Image? _baseImage, _sigImage;
+
+  // Variables for storing scale and translation start values
+  Offset _startFocalPoint = Offset.zero;
+  Offset _startPos = Offset.zero;
+  double _startScale = 1.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _decode();
+  }
+
+  Future<void> _decode() async {
+    final b = await ui.instantiateImageCodec(widget.baseImageBytes);
+    final bf = await b.getNextFrame();
+    final s = await ui.instantiateImageCodec(widget.signaturePngBytes);
+    final sf = await s.getNextFrame();
+    setState(() {
+      _baseImage = bf.image;
+      _sigImage = sf.image;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canRender = _baseImage != null && _sigImage != null;
+    final insets = MediaQuery.of(context).viewInsets;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: insets.bottom),
+      child: SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.92,
+          child: Scaffold(
+            backgroundColor: Colors.black87,
+            appBar: AppBar(
+              title: const Text('Place signature'),
+              backgroundColor: Colors.black,
+              actions: [
+                TextButton(
+                  onPressed: canRender ? _stampAndReturn : null,
+                  child: const Text(
+                    'Stamp',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            body: canRender
+                ? _buildBody()
+                : const Center(child: CircularProgressIndicator()),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    return Center(
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: Stack(
+          key: _stackKey,
+          children: [
+            Image.memory(widget.baseImageBytes),
+            Positioned(
+              left: _sigPos.dx,
+              top: _sigPos.dy,
+              child: GestureDetector(
+                // Handle both scale and drag using scale gesture only
+                onScaleStart: (details) {
+                  _startFocalPoint = details.focalPoint;
+                  _startPos = _sigPos;
+                  _startScale = _sigScale;
+                },
+                onScaleUpdate: (details) {
+                  setState(() {
+                    // Scale the signature
+                    _sigScale = (_startScale * details.scale).clamp(0.2, 5.0);
+
+                    // Drag (translate) the signature using focal point delta
+                    final delta = details.focalPoint - _startFocalPoint;
+                    _sigPos = _startPos + delta;
+                  });
+                },
+                child: Transform.scale(
+                  scale: _sigScale,
+                  alignment: Alignment.topLeft,
+                  child: Image.memory(widget.signaturePngBytes),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _stampAndReturn() async {
+    final rb = _stackKey.currentContext?.findRenderObject() as RenderBox?;
+    if (rb == null) return;
+    final painted = rb.size;
+
+    final base = _baseImage!;
+    final sig = _sigImage!;
+
+    final scaleX = base.width / painted.width;
+    final scaleY = base.height / painted.height;
+
+    final dstLeft = (_sigPos.dx * scaleX).clamp(0.0, base.width.toDouble());
+    final dstTop = (_sigPos.dy * scaleY).clamp(0.0, base.height.toDouble());
+    final dstW = (sig.width * _sigScale * scaleX).clamp(
+      1.0,
+      base.width.toDouble(),
+    );
+    final dstH = (sig.height * _sigScale * scaleY).clamp(
+      1.0,
+      base.height.toDouble(),
+    );
+
+    final rec = ui.PictureRecorder();
+    final canvas = Canvas(
+      rec,
+      Rect.fromLTWH(0, 0, base.width.toDouble(), base.height.toDouble()),
+    );
+    final paint = Paint();
+
+    canvas.drawImage(base, Offset.zero, paint);
+    canvas.drawImageRect(
+      sig,
+      Rect.fromLTWH(0, 0, sig.width.toDouble(), sig.height.toDouble()),
+      Rect.fromLTWH(dstLeft, dstTop, dstW, dstH),
+      paint,
+    );
+
+    final picture = rec.endRecording();
+    final img = await picture.toImage(base.width, base.height);
+    final data = await img.toByteData(format: ui.ImageByteFormat.png);
+    if (!mounted) return;
+    Navigator.pop(context, data!.buffer.asUint8List());
+  }
+}
+
+
+

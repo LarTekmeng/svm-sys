@@ -1,5 +1,4 @@
 import 'package:online_doc_savimex/app_import.dart';
-import 'package:online_doc_savimex/feature/repositories/doctype_repo.dart';
 import 'package:online_doc_savimex/feature/widget/color.dart';
 
 class CreateDocumentTypeScreen extends StatefulWidget {
@@ -65,6 +64,7 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
       // On success, pop back and signal parent to refresh
       Navigator.pop(context, true);
     } catch (e) {
+      print(e);
       setState(() => _error = e.toString());
     } finally {
       setState(() {
@@ -75,10 +75,20 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = Theme.of(context).textTheme.titleLarge?.copyWith(color: AppColors.white, fontWeight: FontWeight.bold);
-    final subTitle = Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.white, fontWeight: FontWeight.bold);
-    final linkText = Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.yellow, fontWeight: FontWeight.bold);
+    final title = Theme.of(context)
+        .textTheme
+        .titleLarge
+        ?.copyWith(color: AppColors.white, fontWeight: FontWeight.bold);
+    final subTitle = Theme.of(context)
+        .textTheme
+        .titleMedium
+        ?.copyWith(color: AppColors.white, fontWeight: FontWeight.bold);
+    final linkText = Theme.of(context)
+        .textTheme
+        .titleMedium
+        ?.copyWith(color: Colors.yellow, fontWeight: FontWeight.bold);
     final isEdit = widget.existing != null;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(''),
@@ -86,9 +96,9 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
       ),
-      body: Container(
-        color: AppColors.background,
-        child: Padding(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           child: Form(
             key: _formKey,
@@ -100,16 +110,11 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
                       ? 'Edit: ${widget.existing?.docTitle}'
                       : 'Create new\nDocument Type',
                   style: title,
-                  // style: const TextStyle(
-                  //   fontSize: 22,
-                  //   fontWeight: FontWeight.bold,
-                  //   color: AppColors.white
-                  // ),
                 ),
                 const SizedBox(height: 30),
 
                 // Title field
-                Text('Document type name:',style: subTitle),
+                Text('Document type name:', style: subTitle),
                 const SizedBox(height: 6),
                 TextFormField(
                   controller: _titleController,
@@ -118,14 +123,14 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
                     filled: true,
                     fillColor: Colors.white,
                   ),
-                  validator:
-                      (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                  onTapOutside: (event){FocusScope.of(context).unfocus();},
+                  validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'Required' : null,
+                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
                 ),
                 const SizedBox(height: 20),
 
                 // Description field
-                Text('Document description:', style: subTitle,),
+                Text('Document description:', style: subTitle),
                 const SizedBox(height: 6),
                 TextFormField(
                   controller: _descriptionController,
@@ -136,9 +141,9 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
                     filled: true,
                     fillColor: Colors.white,
                   ),
-                  validator:
-                      (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                  onTapOutside: (event){FocusScope.of(context).unfocus();},
+                  validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'Required' : null,
+                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
                 ),
                 const SizedBox(height: 15),
 
@@ -151,8 +156,8 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder:
-                                (_) => SetDocumentTypeScreen(documentTypeId: id),
+                            builder: (_) =>
+                                SetDocumentTypeScreen(documentTypeId: id),
                           ),
                         );
                       }
@@ -164,13 +169,13 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
                   ),
                 ),
 
-                const Spacer(),
+                const SizedBox(height: 24), // instead of Spacer()
 
                 if (_error.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(
-                      _error,
+                      'ERROR',
                       style: const TextStyle(color: Colors.red),
                     ),
                   ),
@@ -178,25 +183,22 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    // Confirm button
                     _isLoading
                         ? const CircularProgressIndicator()
                         : ElevatedButton(
-                          onPressed: _onSubmit,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 30,
-                              vertical: 12,
-                            ),
-                          ),
-                          child: Text(
-                            isEdit ? 'Save' : 'Confirm',
-                            style: TextStyle(color: Colors.white),
-                          ),
+                      onPressed: _onSubmit,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 30,
+                          vertical: 12,
                         ),
-
-                    // Cancel button
+                      ),
+                      child: Text(
+                        isEdit ? 'Save' : 'Confirm',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
                     ElevatedButton(
                       onPressed: () => Navigator.pop(context),
                       style: ElevatedButton.styleFrom(
@@ -222,4 +224,5 @@ class _CreateDocumentTypeScreenState extends State<CreateDocumentTypeScreen> {
       ),
     );
   }
+
 }

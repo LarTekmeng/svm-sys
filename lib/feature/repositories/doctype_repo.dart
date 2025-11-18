@@ -87,7 +87,7 @@ class DoctypeRepository {
 
   /* Create new document type */
   Future<Map<String, dynamic>> newDocType(String title, String description) async {
-    final uri = Uri.parse('$baseUrl/api/doctypes/add');
+    final uri = Uri.parse('$baseUrl/api/doctypes');
     final resp = await _postJsonWithRetry(uri, {'title': title, 'description': description});
 
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
