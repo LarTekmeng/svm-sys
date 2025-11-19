@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
 import 'package:online_doc_savimex/app_import.dart';
 import 'package:online_doc_savimex/feature/screen/document/widget/first_section.dart';
+import 'package:online_doc_savimex/feature/screen/document/widget/openPDF.dart';
 import 'package:online_doc_savimex/feature/screen/document/widget/step.dart';
 import 'package:online_doc_savimex/feature/widget/color.dart';
 import 'package:path/path.dart' as p;
@@ -79,15 +80,43 @@ class _DocumentViewState extends State<_DocumentView> {
   // Common UI helpers
   // -----------------------------
   Future<void> _openUrl(BuildContext context, String url) async {
-    final uri = Uri.parse(url);
-    if (!await canLaunchUrl(uri)) {
-      ScaffoldMessenger.of(
+
+    if (url.toLowerCase().endsWith('.pdf')) {
+      // Open in in-app PDF viewer
+      Navigator.push(
         context,
-      ).showSnackBar(SnackBar(content: Text('Cannot open: $url')));
+        MaterialPageRoute(
+          builder: (_) => PdfViewerPage(url: url),
+        ),
+      );
       return;
     }
-    await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    final uri = Uri.parse(url);
+
+    // Use external app for PDF/DOCX (fixes iOS crash)
+    try {
+      final ok = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Cannot open: $url')),
+        );
+      }
+    } catch (e) {
+      // Last fallback
+      try {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      } catch (_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to open file: $url')),
+        );
+      }
+    }
   }
+
 
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -159,6 +188,23 @@ class _DocumentViewState extends State<_DocumentView> {
         return;
     }
   }
+
+  Future<int> _askUserForPdfPage(BuildContext context, int totalPages) async {
+    return await showModalBottomSheet<int>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: ListView.builder(
+          itemCount: totalPages,
+          itemBuilder: (_, i) => ListTile(
+            leading: const Icon(Icons.picture_as_pdf),
+            title: Text('Page ${i + 1}'),
+            onTap: () => Navigator.pop(context, i + 1),
+          ),
+        ),
+      ),
+    ) ?? 1;
+  }
+
 
   // -----------------------------
   // Existing download flow (kept)
@@ -234,46 +280,68 @@ class _DocumentViewState extends State<_DocumentView> {
     required bool isPdf,
   }) async {
     try {
-      // 1) Base image (image directly, or PDF->PNG first page)
       Uint8List? baseBytes;
-      if (!isPdf) {
-        baseBytes = await _fetchBytes(file.fileUrl);
+
+      // If PDF → let user choose the page
+      if (isPdf) {
+        final pdfData = await _fetchBytes(file.fileUrl);
+        if (pdfData == null) {
+          _snack('Cannot load PDF.');
+          return;
+        }
+
+        final pdf = await PdfDocument.openData(pdfData);
+        final pageCount = pdf.pagesCount;
+
+        // Ask user which page to sign
+        final chosenPage = await _askUserForPdfPage(context, pageCount);
+
+        // Render chosen page
+        baseBytes = await _renderPdfPageToPng(
+          file.fileUrl,
+          pageIndex: chosenPage,
+        );
+
+        await pdf.close();
       } else {
-        baseBytes = await _renderPdfPageToPng(file.fileUrl, pageIndex: 1);
+        // Normal image
+        baseBytes = await _fetchBytes(file.fileUrl);
       }
+
       if (baseBytes == null) {
         _snack('Failed to open the file for signature.');
         return;
       }
 
-      // 2) Let user choose their signature PNG/JPG from device
+      // Pick user's signature
       final sigBytes = await _pickSignatureImage();
       if (sigBytes == null) {
         _snack('No signature selected.');
         return;
       }
 
-      // 3) Show full-screen sheet to position/scale signature
+      // Open the signer sheet
       final stamped = await showModalBottomSheet<Uint8List>(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.black87,
-        builder:
-            (_) => _SignatureStampSheet(
-              baseImageBytes: baseBytes!,
-              signaturePngBytes: sigBytes,
-            ),
+        builder: (_) => _SignatureStampSheet(
+          baseImageBytes: baseBytes!,
+          signaturePngBytes: sigBytes,
+        ),
       );
 
-      // 4) Upload stamped PNG as a new attachment
+      // Upload stamped file
       if (stamped != null) {
         final baseName = p.basenameWithoutExtension(file.fileName);
         final outName = '${baseName}_signed.png';
+
         final payload = UploadFilePayload(
           name: outName,
           bytes: stamped,
           mime: 'image/png',
         );
+
         if (!mounted) return;
         context.read<ViewBloc>().add(ViewUploadPicked([payload]));
       }
