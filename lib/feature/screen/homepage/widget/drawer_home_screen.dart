@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:online_doc_savimex/app_import.dart';
 import 'package:online_doc_savimex/feature/screen/department/list_department.dart';
+import 'package:online_doc_savimex/feature/screen/employee/manage_employee.dart';
 import 'package:online_doc_savimex/feature/screen/profile/edit_employee_profile_screen.dart';
 import '../../../bloc/editBLoC/edit_profile_bloc.dart';
 import '../../../repositories/profile_repo.dart';
@@ -65,7 +66,7 @@ class DrawerHomeScreen extends StatelessWidget {
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => RegisterScreen()),
+                MaterialPageRoute(builder: (_) => EmployeeManagement()),
               );
             }),
           ),

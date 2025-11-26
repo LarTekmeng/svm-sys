@@ -38,3 +38,50 @@ exports.create = async (req, res) => {
     res.status(500).json({ error: 'Error creating department' });
   }
 };
+
+exports.update = async (req, res) => {
+    try{
+        const { id } = req.params;
+        const { name } = req.body || {};
+        const trimmed = (name || '').trim();
+
+        if (!trimmed) return res.status(400).json({ error: 'name is required' });
+        if (trimmed.length > 100) {
+            return res.status(400).json({ error: 'name must be <= 100 characters' });
+        }
+        const existing = await db.oneOrNone('SELECT id FROM department WHERE id=$1', [id]);
+        if (!existing) return res.status(404).json({ error: 'Department not found' });
+
+        const duplicate = await db.oneOrNone(
+            'SELECT id FROM department WHERE LOWER(name)=LOWER($1) AND id !=$2',
+            [trimmed, id]
+        );
+
+        if (duplicate) return res.status(409).json({ error: 'Department name already exists' });
+        const updated = await db.one(
+            'UPDATE department SET name=$1 WHERE id=$2 RETURNING id, name',
+            [trimmed, id]
+        );
+        res.json(updated);
+    } catch(e){
+        console.error(e);
+        res.status(500).json({ error: 'Error updating department'});
+    }
+
+};
+
+exports.delete = async (req, res) => {
+    try{
+        const { id } = req.params;
+
+        const existing = await db.oneOrNone('SELECT id FROM department WHERE id=$1', [id]);
+        if (!existing) return res.status(404).json({ error: 'Department not found'});
+
+        await db.none('DELETE FROM department WHERE id=$1', [id]);
+        res.status(204).send();
+    }
+    catch(e){
+        console.error(e);
+        res.status(500).json({ error: 'Error deleting department' });
+    }
+};

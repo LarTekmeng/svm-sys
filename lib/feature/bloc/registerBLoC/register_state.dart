@@ -26,6 +26,7 @@ class RoleLoadSuccess extends RegisterState {
 }
 
 class RegisterSuccess extends RegisterState {}
+class RegisterSuccessNew extends RegisterState {}
 
 class RegisterFailure extends RegisterState {
   final String error;

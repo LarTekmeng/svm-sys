@@ -11,12 +11,13 @@ class RegisterRequested extends RegisterEvent {
   final int departmentID;
   final int? roleId;
   final File? profileImage;
+  final bool createNew;
   RegisterRequested(
       this.employeeName,
       this.email,
       this.password,
       this.departmentID,
       this.employeeID,
-      {this.profileImage,this.roleId}
+      {this.profileImage,this.roleId, this.createNew = false}
       );
 }

@@ -32,10 +32,59 @@ class _ListDepartmentState extends State<ListDepartment> {
   }
 
   void _goCreate() async {
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const CreateDepartment()),
-    );
+    final created = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const CreateDepartment()));
     if (created == true && mounted) _reload();
+  }
+
+  void _goEdit(Department department) async {
+    final updated = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => CreateDepartment(department: department,)));
+    if (updated == true && mounted) _reload();
+  }
+
+  Future<void> _delete(Department department) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Delete Department'),
+            content: Text(
+              'Are you sure you want to delete "${department.name}"?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                ),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await _repo.deleteDepartment(department.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${department.name} deleted')));
+      _reload();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
+    }
   }
 
   @override
@@ -60,8 +109,11 @@ class _ListDepartmentState extends State<ListDepartment> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
                   const SizedBox(height: 80),
-                  Icon(Icons.warning_amber_rounded,
-                      size: 48, color: Theme.of(context).colorScheme.error),
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 48,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                   const SizedBox(height: 12),
                   Center(child: Text('Failed to load departments')),
                   const SizedBox(height: 8),
@@ -103,8 +155,23 @@ class _ListDepartmentState extends State<ListDepartment> {
               itemBuilder: (_, i) {
                 final d = items[i];
                 return ListTile(
-                  leading: CircleAvatar(child: Text(d.id?.toString() ?? '-')),
+                  leading: CircleAvatar(child: Text(d.id.toString() ?? '-')),
                   title: Text(d.name),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: () => _goEdit(d),
+                        icon: const Icon(Icons.edit),
+                        tooltip: 'Edit',
+                      ),
+                      IconButton(
+                        onPressed: () => _delete(d),
+                        icon: Icon(Icons.delete),
+                        tooltip: 'Delete',
+                      ),
+                    ],
+                  ),
                 );
               },
             );

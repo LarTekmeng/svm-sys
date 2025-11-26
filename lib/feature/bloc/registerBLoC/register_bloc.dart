@@ -42,7 +42,11 @@ class RegisterBloc extends Bloc<RegisterEvent, RegisterState> {
         employeeID: event.employeeID,
         profileImage: event.profileImage,
       );
-      emit(RegisterSuccess());
+      if (event.createNew){
+        emit (RegisterSuccessNew());
+      }else{
+        emit (RegisterSuccess());
+      }
     } catch (e) {
       emit(RegisterFailure(e.toString()));
     }
