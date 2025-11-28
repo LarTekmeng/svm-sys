@@ -21,3 +21,28 @@ class RegisterRequested extends RegisterEvent {
       {this.profileImage,this.roleId, this.createNew = false}
       );
 }
+
+// Event for updating employee (add to your RegisterBloc)
+class UpdateEmployeeRequested extends RegisterEvent {
+  final int employeeId;
+  final String name;
+  final String email;
+  final String? password;
+  final int departmentId;
+  final String empId;
+  final int? roleId;
+  final File? profileImage;
+
+  UpdateEmployeeRequested({
+    required this.employeeId,
+    required this.name,
+    required this.email,
+    this.password,
+    required this.departmentId,
+    required this.empId,
+    this.roleId,
+    this.profileImage,
+  });
+}
+
+

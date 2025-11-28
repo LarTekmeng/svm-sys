@@ -4,6 +4,7 @@ const db = require('../db');
 const multer = require('multer');
 const bcrypt = require('bcrypt');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const path = require('path');
 
 // Configure S3 client for R2
 const s3 = new S3Client({
@@ -15,18 +16,26 @@ const s3 = new S3Client({
   },
 });
 
-// Configure multer middleware for file uploads
+const ALLOWED_IMAGE_EXT = new Set([
+  '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'
+]);
+
+const extOf = (filename) => {
+  return path.extname(filename || '').toLowerCase();
+};
+
+// New multer config – ONLY check extension, NOT mimetype
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
+    fileSize: 5 * 1024 * 1024, // 5MB
   },
   fileFilter: (req, file, cb) => {
-    // Accept only image files
-    if (file.mimetype.startsWith('image/')) {
+    const ext = extOf(file.originalname);
+    if (ALLOWED_IMAGE_EXT.has(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed'), false);
+      cb(new Error(`File type not allowed: ${ext || '(no extension)'}`), false);
     }
   },
 });
@@ -75,42 +84,82 @@ exports.list = async (_req, res) => {
 };
 
 /** GET /api/employees/:employeeId
- * Accepts either em_id (string) or numeric e.id
+ *  Accepts either:
+ *   - em_id (string) → e.g. "E010", "admin123"
+ *   - numeric id (as string in URL) → e.g. "7"
  */
 exports.getByEmployeeId = async (req, res) => {
-  const { employeeId } = req.params;
-  try {
-    const row = await db.oneOrNone(
-      `
-      SELECT
-        e.id,
-        e.employee_name,
-        e.email,
-        e.dp_id                                    AS department_id,
-        e.em_id,
-        d.name                                     AS department_name,
-        COALESCE(i.file_url, '')                   AS profile_image_url,
-        e.role_id,
-        r.code                                     AS role_code
-      FROM employee e
-      LEFT JOIN department d ON d.id = e.dp_id
-      LEFT JOIN role r       ON r.id = e.role_id
-      LEFT JOIN LATERAL (
-        SELECT file_url
-        FROM employee_images ei
-        WHERE ei.employee_id = e.id
-        ORDER BY ei.created_at DESC, ei.id DESC
-        LIMIT 1
-      ) AS i ON TRUE
-      WHERE
-        e.em_id = $1
-        OR ($1 ~ '^\\d+$' AND e.id = ($1)::int)
-      LIMIT 1
-    `,
-      [employeeId]
-    );
+  const { employeeId } = req.params; // always string from URL
 
-    if (!row) return res.status(404).json({ error: 'Employee not found' });
+  try {
+    let row;
+
+    // Case 1: Pure number → treat as primary key (id)
+    if (/^\d+$/.test(employeeId)) {
+      const numericId = parseInt(employeeId, 10);
+      row = await db.oneOrNone(
+        `
+        SELECT
+          e.id,
+          e.employee_name,
+          e.email,
+          e.dp_id                                    AS department_id,
+          e.em_id,
+          d.name                                     AS department_name,
+          COALESCE(i.file_url, '')                   AS profile_image_url,
+          e.role_id,
+          r.code                                     AS role_code
+        FROM employee e
+        LEFT JOIN department d ON d.id = e.dp_id
+        LEFT JOIN role r       ON r.id = e.role_id
+        LEFT JOIN LATERAL (
+          SELECT file_url
+          FROM employee_images ei
+          WHERE ei.employee_id = e.id
+          ORDER BY ei.created_at DESC, ei.id DESC
+          LIMIT 1
+        ) i ON TRUE
+        WHERE e.id = $1
+        LIMIT 1
+        `,
+        [numericId]
+      );
+    }
+    // Case 2: Not a pure number → treat as em_id (string)
+    else {
+      row = await db.oneOrNone(
+        `
+        SELECT
+          e.id,
+          e.employee_name,
+          e.email,
+          e.dp_id                                    AS department_id,
+          e.em_id,
+          d.name                                     AS department_name,
+          COALESCE(i.file_url, '')                   AS profile_image_url,
+          e.role_id,
+          r.code                                     AS role_code
+        FROM employee e
+        LEFT JOIN department d ON d.id = e.dp_id
+        LEFT JOIN role r       ON r.id = e.role_id
+        LEFT JOIN LATERAL (
+          SELECT file_url
+          FROM employee_images ei
+          WHERE ei.employee_id = e.id
+          ORDER BY ei.created_at DESC, ei.id DESC
+          LIMIT 1
+        ) i ON TRUE
+        WHERE e.em_id = $1
+        LIMIT 1
+        `,
+        [employeeId]
+      );
+    }
+
+    if (!row) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
     res.json(row);
   } catch (e) {
     console.error('GET /api/employees/:employeeId error:', e);
@@ -146,54 +195,67 @@ exports.getByDepartment = async (req, res) => {
       ) AS i ON TRUE
       WHERE e.dp_id = $1
       ORDER BY e.id DESC
-    `,
+      `,
       [departmentId]
     );
     res.json(rows);
   } catch (e) {
     console.error('GET /api/employees/department/:departmentId error:', e);
-    res.status(500).json({ error: 'Error fetching employee by department' });
+    res.status(500).json({ error: 'Server error' });
   }
 };
 
-/** PUT /api/employees/:id - Update employee */
+/* =======================================================
+   UPDATE EMPLOYEE
+   - Allows updating name, email, password (optional), dept, em_id, role (optional)
+   - Also supports uploading new profile image (replaces latest)
+   ======================================================= */
 exports.update = [
-  upload.single('profile_image'),
+  upload.single('profile_image'), // single file named 'profile_image'
   async (req, res) => {
     const { id } = req.params;
-    const { employee_name, email, password, dp_id, role_id } = req.body || {};
-
-    if (!employee_name || !email || !dp_id) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
+    const {
+      employee_name,
+      email,
+      password,
+      dp_id,
+      em_id,
+      role_id,
+    } = req.body;
 
     try {
       await db.tx(async (t) => {
         // 1) Check if employee exists
         const existing = await t.oneOrNone(
-          'SELECT id, em_id FROM employee WHERE id = $1',
+          'SELECT id FROM employee WHERE id = $1',
           [id]
         );
         if (!existing) {
           throw Object.assign(new Error('Employee not found'), { http: 404 });
         }
 
-        // 2) Check for email duplication (excluding current employee)
-        const emailDup = await t.oneOrNone(
-          'SELECT id FROM employee WHERE email = $1 AND id != $2',
-          [email, id]
-        );
-        if (emailDup) {
-          throw Object.assign(new Error('Email already in use'), { http: 409 });
+        // 2) Validate required fields
+        if (
+          !employee_name?.trim() ||
+          !email?.trim() ||
+          !dp_id ||
+          !em_id?.trim()
+        ) {
+          throw Object.assign(new Error('Missing required fields'), {
+            http: 400,
+          });
         }
 
-        // 3) Validate department exists
-        const deptExists = await t.oneOrNone(
-          'SELECT id FROM department WHERE id = $1',
-          [dp_id]
+        // 3) Check for unique email/em_id (exclude self)
+        const dup = await t.oneOrNone(
+          `SELECT id FROM employee
+           WHERE (email = $1 OR em_id = $2) AND id <> $3`,
+          [email.trim(), em_id.trim(), id]
         );
-        if (!deptExists) {
-          throw Object.assign(new Error('Department not found'), { http: 400 });
+        if (dup) {
+          throw Object.assign(new Error('Email or Employee ID already in use'), {
+            http: 409,
+          });
         }
 
         // 4) Validate role if provided
@@ -241,6 +303,11 @@ exports.update = [
         // 8) Handle profile image upload if provided
         if (req.file) {
           const f = req.file;
+          const ext = extOf(f.originalname);
+          if (!ALLOWED_IMAGE_EXT.has(ext)) {
+            throw new Error(`Invalid image extension: ${ext || '(no extension)'}`);
+          }
+
           const ts = Date.now();
           const key = `employees/${id}/${ts}-${f.originalname}`;
           await uploadToR2(key, f.buffer, f.mimetype);
@@ -275,8 +342,9 @@ exports.delete = async (req, res) => {
   const { id } = req.params;
 
   try {
+    let deletedName = 'Unknown';
+
     await db.tx(async (t) => {
-      // 1) Check if employee exists
       const existing = await t.oneOrNone(
         'SELECT id, employee_name FROM employee WHERE id = $1',
         [id]
@@ -284,25 +352,22 @@ exports.delete = async (req, res) => {
       if (!existing) {
         throw Object.assign(new Error('Employee not found'), { http: 404 });
       }
+      deletedName = existing.employee_name;
 
-      // 2) Delete related records first (cascade)
-      // Delete employee images
       await t.none('DELETE FROM employee_images WHERE employee_id = $1', [id]);
-
-      // Add other related deletes as needed
-      // await t.none('DELETE FROM employee_documents WHERE employee_id = $1', [id]);
-      // await t.none('DELETE FROM employee_attendance WHERE employee_id = $1', [id]);
-
-      // 3) Delete the employee
       await t.none('DELETE FROM employee WHERE id = $1', [id]);
-
-      res.status(200).json({
-        message: `Employee ${existing.employee_name} deleted successfully`,
-      });
+      // Do NOT send response here!
     });
+
+    // ← Only send response AFTER transaction successfully committed
+    return res.status(200).json({
+      message: `Employee ${deletedName} deleted successfully`,
+    });
+
+    console.log(`Employee ${deletedName} (id=${id}) deleted successfully`);
   } catch (e) {
     if (e.http) return res.status(e.http).json({ error: e.message });
     console.error('Delete employee error:', e);
-    res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ error: 'Failed to delete employee' });
   }
 };

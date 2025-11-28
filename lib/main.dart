@@ -40,6 +40,7 @@ void main() async {
               depRepo: ctx.read<DepartmentRepository>(),
               authRepo: ctx.read<AuthRepository>(),
               roleRepo: ctx.read<RoleRepository>(),
+              employeeRepo: ctx.read<EmployeeRepository>(),
             )..add(LoadDepartments()),
           ),
           BlocProvider<AuthLoginBloc>(
@@ -79,8 +80,17 @@ class _MyAppState extends State<MyApp> {
         '/': (context) => SplashScreen(),
         '/login': (context) => LoginScreen(),
         '/home': (context) {
-          final employee = ModalRoute.of(context)!.settings.arguments as Employee;
-          return Homescreen(employeeID: employee.employeeID);
+          final employee = ModalRoute.of(context)!.settings.arguments as Employee?;
+
+          // 🔍 Debug log
+          print('🔍 ROUTE /home - Employee: ${employee?.employeeID} - ${employee?.employeeName}');
+
+          if (employee == null) {  // ✅ FIXED: Using == for comparison (was: employee = null)
+            print('🔍 ROUTE /home - No employee, redirecting to login');
+            return const LoginScreen();
+          }
+
+          return Homescreen(employeeID: employee.employeeID);  // ✅ Correct property name
         }
       },
     );

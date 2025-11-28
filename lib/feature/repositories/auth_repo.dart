@@ -213,13 +213,13 @@ class AuthRepository {
       'password': password,
       'dp_id': departmentID.toString(),
       'em_id': employeeID,
-      'role_id': roleId,
+      if (roleId != null) 'role_id': roleId.toString(),  // ADD THIS: Only send if non-null, as string
       if (profileImage != null)
         'profile_image': await MultipartFile.fromFile(
           profileImage.path,
           filename: profileImage.path.split(Platform.pathSeparator).last,
         ),
-    });
+    });  // REMOVE the invalid "if (roleId != null) { request.fields... }" block entirely
 
     final resp = await _dio.post('/api/auth/register', data: form);
     if (resp.statusCode != 201) {
@@ -239,6 +239,7 @@ class AuthRepository {
     required bool rememberMe,
   }) async {
     // Ensure NO Authorization header is sent
+    print('🔍 LOGIN ATTEMPT: em_id="$employeeID" rememberMe=$rememberMe');
     final resp = await _dio.post(
       '/api/auth/login',
       data: {
@@ -251,6 +252,9 @@ class AuthRepository {
         headers: {'Authorization': null},
       ),
     );
+
+    print('🔍 RESPONSE STATUS: ${resp.statusCode}');
+    print('🔍 RESPONSE DATA: ${resp.data}');
 
     if (resp.statusCode == 401) {
       // Pull a useful message from server if present
@@ -281,6 +285,8 @@ class AuthRepository {
     _currentAccessToken  = accessToken;
     _currentRefreshToken = refreshToken;
     _dio.options.headers['Authorization'] = 'Bearer $accessToken';
+
+    print('🔍 LOGGED IN AS: ${empMap['em_id']} - ${empMap['employee_name']}');
 
     return employee;
   }

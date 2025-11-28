@@ -83,7 +83,7 @@ class _EmployeeManagementState extends State<EmployeeManagement> {
     if (confirm == true) {
       try {
         // Call delete API here
-        // await context.read<EmployeeRepository>().deleteEmployee(employee.id!);
+        await context.read<EmployeeRepository>().deleteEmployee(employee.id!);
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -157,6 +157,7 @@ exports.register = [
    ======================================================= */
 exports.login = async (req, res) => {
   const { em_id, password } = req.body || {};
+
   const rememberMe = normalizeRememberMe(req.body?.rememberMe);
 
   if (!em_id || !password) {
@@ -170,11 +171,14 @@ exports.login = async (req, res) => {
        WHERE em_id = $1`,
       [em_id]
     );
+
+
     if (!employee) {
       return res.status(401).json({ error: 'Invalid ID or Password' });
     }
 
     const match = await bcrypt.compare(password, employee.password);
+
     if (!match) {
       return res.status(401).json({ error: 'Invalid ID or Password' });
     }

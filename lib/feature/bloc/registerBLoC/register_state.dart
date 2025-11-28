@@ -28,6 +28,9 @@ class RoleLoadSuccess extends RegisterState {
 class RegisterSuccess extends RegisterState {}
 class RegisterSuccessNew extends RegisterState {}
 
+// State for update success (add to your RegisterBloc)
+class UpdateEmployeeSuccess extends RegisterState {}
+
 class RegisterFailure extends RegisterState {
   final String error;
   RegisterFailure(this.error);

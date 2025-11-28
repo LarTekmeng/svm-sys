@@ -4,8 +4,9 @@ import 'package:online_doc_savimex/app_import.dart';
 
 class RegisterScreen extends StatefulWidget {
   final Employee? employeeToEdit; // null = create mode, not null = edit mode
+  final String? currentEmployeeId;
 
-  const RegisterScreen({super.key, this.employeeToEdit});
+  const RegisterScreen({super.key, this.employeeToEdit, this.currentEmployeeId});
 
   @override
   _RegisterScreenState createState() => _RegisterScreenState();
@@ -208,7 +209,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (_) => Homescreen(employeeID: _empIdCtrl.text),
+              builder: (_) => Homescreen(employeeID: widget.currentEmployeeId ?? _empIdCtrl.text),
             ),
           );
         } else if (state is RegisterSuccessNew) {
@@ -455,12 +456,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: state is RegisterLoading ? null : _onSave,
-                              child: const Text('Save'),
-                            ),
-                          ),
+                          // Expanded(
+                          //   child: ElevatedButton(
+                          //     onPressed: state is RegisterLoading ? null : _onSave,
+                          //     child: const Text('Save'),
+                          //   ),
+                          // ),
                           const SizedBox(width: 16),
                           Expanded(
                             child: ElevatedButton(
@@ -481,28 +482,3 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 }
 
-// Event for updating employee (add to your RegisterBloc)
-class UpdateEmployeeRequested extends RegisterEvent {
-  final int employeeId;
-  final String name;
-  final String email;
-  final String? password;
-  final int departmentId;
-  final String empId;
-  final int? roleId;
-  final File? profileImage;
-
-  UpdateEmployeeRequested({
-    required this.employeeId,
-    required this.name,
-    required this.email,
-    this.password,
-    required this.departmentId,
-    required this.empId,
-    this.roleId,
-    this.profileImage,
-  });
-}
-
-// State for update success (add to your RegisterBloc)
-class UpdateEmployeeSuccess extends RegisterState {}

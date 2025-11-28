@@ -26,7 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
       context.read<AuthLoginBloc>().add(
         LoginRequested(
           _employeeIdCtrl.text.trim(),
-          _passCtrl.text.trim(),
+          _passCtrl.text,
           rememberMe: _rememberMe,
         ),
       );
